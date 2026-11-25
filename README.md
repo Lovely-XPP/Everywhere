@@ -1,20 +1,37 @@
-# Everywhere
+<h1 align="center">
+  <img src="swift/Host/MacApp/VirtualLocation.png" width="112" height="112" alt="Everywhere 应用图标"><br>
+  Everywhere
+</h1>
 
-**简体中文** · [English](README.en.md)
+<p align="center">在 Mac 或 Windows 地图上选点，模拟 iPhone 和 iPad 的位置。</p>
 
-Everywhere 是一款面向 iPhone 和 iPad 的定位模拟工具。你可以在 macOS 或 Windows 控制台的地图上选点，通过 USB 或 Wi-Fi 为已配对的设备设置、更换或清除模拟位置，也可以在移动端遥控主机，并用 Core Location 样本核对设备实际报告的位置。
-
-Everywhere is a location simulation tool for iPhone and iPad. Pick a point on the map in the macOS or Windows console to set, change, or clear a paired device’s simulated location over USB or Wi-Fi. The mobile app can also control the host and show the location the device reports through Core Location.
+<p align="center">
+  <strong>简体中文</strong> · <a href="README.en.md">English</a><br>
+  <a href="#主要功能">主要功能</a> · <a href="#快速开始">快速开始</a> · <a href="#开发入口">开发入口</a> · <a href="#致谢">致谢</a>
+</p>
 
 > **免责声明**
 >
 > 本项目仅供技术测试使用，不得用于任何非法活动。
 
-Apple 端源码位于 `swift/`，Windows Qt 端源码位于 `windows/`。从项目根目录执行 `./package.sh` 导出 Apple 版本；Windows x64 使用 `package-windows.ps1`。Windows 与 Mac 共用 iAP2 协议和软件定位后端，两端均从模式选择进入地图。Windows 的系统配对、USB 信任、Wi-Fi IP 验证与验证范围见 [Windows 使用说明](windows/README.md)。
+## 主要功能
 
-Mac 上的 SwiftUI 控制台向用户已配对的 iPhone 或 iPad 发出定点和清除请求。Everywhere 内置诊断页，显示本机从 Core Location 收到的位置样本和当前网络路径。手机遥控可以选择 Wi-Fi 或 USB。USB 和 Wi-Fi 都只允许操作已绑定的本机。
+- **地图选点**。搜索地名、点按地图、输入经纬度，或从收藏中打开地点。发送到设备的坐标统一使用 WGS 84。
+- **USB 与 Wi-Fi 模拟定位**。在桌面控制台为已配对的设备设点、换点或清除模拟位置。Mac 和 Windows 共用软件定位后端。
+- **手机遥控**。首次通过 USB 将手机与主机绑定，之后可在手机上选点，由在线主机执行。每台移动设备只能操作自己的位置。
+- **定位诊断**。在 iPhone 或 iPad 上查看 Core Location 返回的坐标、采样时间、水平精度和来源标记，核对设点与恢复结果。
+- **蓝牙模式**。实验性 iAP2 配件模式通过经典蓝牙发送位置。BLE 直连模式用于更新 Everywhere 手机应用内的地图标记。
 
-iPhone 与 iPad 在 Everywhere 中连接 Mac 后只能设定和恢复自己的位置。首次用 USB 在 Mac 开启这台设备的连接，手机自动取得本机绑定。之后连接同一 Mac 的 Wi-Fi 服务时沿用该绑定；未绑定的网络连接只能查看连接状态。需要同时更新 Mac 控制台。
+## 快速开始
+
+| 平台 | 从源码构建 | 启动控制台 |
+| --- | --- | --- |
+| macOS | 在项目根目录运行 `./package.sh`。[Apple 构建要求](#导出-ipa-和-mac-app) | 运行 `open Build/Everywhere/Everywhere.app` |
+| Windows x64 | 在项目根目录的 PowerShell 运行 `.\package-windows.ps1`。[Windows 构建要求](windows/README.md) | 解压 `Build/Exports/` 中生成的 ZIP，打开 `Everywhere.exe` |
+
+1. **连接设备**。选择「软件模拟模式」，解锁 iPhone 或 iPad，用 USB 数据线连接电脑，在设备上确认信任，并按提示开启开发者模式。在控制台选中目标设备。
+2. **发送位置**。在地图上选点，点击「发送地图选点」，阅读操作说明并点击「我已知晓」。在目标设备的「诊断」中查看新的定位样本。
+3. **恢复定位**。保持设备连接，点击「恢复真实定位」并确认。收到清除回执后，在目标设备查看下一条定位样本，核对是否回到实际位置。
 
 ## 检查本机定位来源
 

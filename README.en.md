@@ -1,16 +1,37 @@
-# Everywhere
+<h1 align="center">
+  <img src="swift/Host/MacApp/VirtualLocation.png" width="112" height="112" alt="Everywhere app icon"><br>
+  Everywhere
+</h1>
 
-[简体中文](README.md) · **English**
+<p align="center">Pick a point on your Mac or Windows PC to simulate an iPhone or iPad’s location.</p>
 
-Everywhere lets you set, change, or clear a paired iPhone or iPad’s simulated location from a map on macOS or Windows over USB or Wi-Fi. The mobile app can also control the host and show the location the device reports through Core Location. An experimental Bluetooth accessory mode uses iAP2 to send location updates.
+<p align="center">
+  <a href="README.md">简体中文</a> · <strong>English</strong><br>
+  <a href="#features">Features</a> · <a href="#quick-start">Quick start</a> · <a href="#development-entry-points">Development</a> · <a href="#acknowledgments">Acknowledgments</a>
+</p>
 
 > **Disclaimer**
 >
 > This project is for technical testing only. Do not use it for any illegal activity.
 
-The Apple apps live in `swift/` and the Windows Qt console in `windows/`. From the repository root, run `./package.sh` to export the Apple apps or `./package-windows.ps1` from PowerShell to build the Windows x64 package.
+## Features
 
-The Mac console manages the device session. When using the mobile app as a remote, an iPhone or iPad can change only its own location. To establish that binding, connect the device over USB and enable its connection on the Mac. Later Wi-Fi connections to the same Mac reuse the binding. An unbound network client can view connection status only. Update the Mac and mobile apps together.
+- **Map selection.** Search for a place, click the map, enter coordinates, or return to a favorite. The console sends coordinates in WGS 84.
+- **USB and Wi-Fi simulation.** Set, change, or clear a paired device’s simulated location from the desktop. The Mac and Windows consoles share the same software location backend.
+- **Mobile remote control.** Bind the phone to its host over USB, then pick a point on the phone and let the online host apply it. Each mobile device controls its own location.
+- **Location diagnostics.** Check the coordinates, timestamp, horizontal accuracy, and source flags reported by Core Location on the iPhone or iPad after setting or clearing a point.
+- **Bluetooth modes.** The experimental iAP2 accessory mode sends location updates over Classic Bluetooth. A separate BLE connection updates the map marker inside the Everywhere mobile app.
+
+## Quick start
+
+| Platform | Build from the repository root | Open the console |
+| --- | --- | --- |
+| macOS | Run `./package.sh`. [Apple build requirements](#export-the-ipa-and-mac-app) | Run `open Build/Everywhere/Everywhere.app`. |
+| Windows x64 | Run `.\package-windows.ps1` in PowerShell. [Windows build requirements (Chinese)](windows/README.md) | Extract the ZIP in `Build/Exports/` and open `Everywhere.exe`. |
+
+1. **Connect your device.** Choose **Software simulation**, unlock the iPhone or iPad, and connect it to the computer with a USB data cable. Confirm trust, enable Developer Mode if prompted, and select the device in the console.
+2. **Send a location.** Pick a point on the map, choose **Send map point**, read the instructions, and select **I understand**. Open Diagnostics on the target device to check a fresh location sample.
+3. **Restore the location.** Keep the device connected, select **Restore real location**, and confirm. After the console acknowledges the clear request, check the next device sample to see whether it shows the actual location.
 
 ## Check the device’s location source
 
