@@ -2,6 +2,7 @@
 import argparse
 import asyncio
 from contextlib import AsyncExitStack, aclosing, redirect_stdout
+import ipaddress
 import json
 import logging
 import os
@@ -9,7 +10,7 @@ import sys
 
 from modern_backend import BACKEND_VERSION, Rejected, command_loop, emit, same_device
 from pymobiledevice3.exceptions import AlreadyMountedError
-from pymobiledevice3.lockdown import create_using_usbmux, get_mobdev2_lockdowns
+from pymobiledevice3.lockdown import create_using_mobdev2, create_using_usbmux, get_mobdev2_lockdowns
 from pymobiledevice3.remote.tunnel_service import CoreDeviceTunnelProxy
 from pymobiledevice3.remote.userspace_tunnel import TunnelProvider, UserspaceRsdTunnel
 from pymobiledevice3.services.amfi import AmfiService
@@ -18,6 +19,17 @@ from pymobiledevice3.services.dvt.instruments.location_simulation import Locatio
 from pymobiledevice3.services.mobile_image_mounter import MobileImageMounterService, auto_mount, image_type_for_device
 from pymobiledevice3.services.simulate_location import DtSimulateLocation
 from pymobiledevice3.usbmux import list_devices
+
+
+async def wireless_target(address, udid=None):
+    """按指定 IP 和本机已有配对记录核验手机身份，调用方负责关闭连接。"""
+    host = str(ipaddress.ip_address(address.strip()))
+    client = await asyncio.wait_for(create_using_mobdev2(hostname=host, udid=udid), 6)
+    if (not client.paired or not client.udid or client.short_info.get("DeviceClass") not in ("iPhone", "iPad")
+            or (udid and not same_device(client.udid, udid))):
+        await client.close()
+        raise Rejected("此地址的设备与所选的已配对手机不一致。")
+    return client
 
 
 async def paired_wifi(udid):
@@ -117,7 +129,10 @@ async def mount_if_needed(provider):
 
 async def session(args, consumer=None):
     async with AsyncExitStack() as stack:
-        client = await connect(args.udid, args.transport, pair=True)
+        if args.transport == "Network" and getattr(args, "address", None):
+            client = await wireless_target(args.address, args.udid)
+        else:
+            client = await connect(args.udid, args.transport, pair=True)
         await stack.enter_async_context(client)
         if args.prepare_wifi:
             await client.save_pair_record()

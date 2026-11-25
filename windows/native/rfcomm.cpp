@@ -29,6 +29,12 @@ static std::string name(const wchar_t* w) {
 }
 int main(int argc,char** argv) {
     if(argc<2) return 1;
+    if(strcmp(argv[1],"--self-test")==0){
+        WSADATA version{};
+        if(WSAStartup(MAKEWORD(2,2),&version)) return 3;
+        WSACleanup();
+        return address(0x010203040506ULL)=="01:02:03:04:05:06" ? 0 : 1;
+    }
     bool list=strcmp(argv[1],"--list")==0, controller=strcmp(argv[1],"--controller")==0;
     bool discover = strcmp(argv[1], "--discover") == 0;
     BLUETOOTH_FIND_RADIO_PARAMS params{sizeof(params)};
@@ -70,7 +76,7 @@ int main(int argc,char** argv) {
     remote.serviceClassId={0x00000000,0xdeca,0xfade,{0xde,0xca,0xde,0xaf,0xde,0xca,0xca,0xfe}};
     std::cerr<<"EW_PHASE discovery"<<std::endl;
     if(connect(socketFd,reinterpret_cast<sockaddr*>(&remote),sizeof(remote))!=0) {
-        std::cerr<<"Windows RFCOMM error "<<WSAGetLastError()<<std::endl;return 4;
+        std::cerr<<"EW_WINDOWS_RFCOMM_ERROR status="<<WSAGetLastError()<<std::endl;return 4;
     }
     _setmode(0,_O_BINARY); _setmode(1,_O_BINARY);
     std::cerr<<"EW_OPEN_READY"<<std::endl;

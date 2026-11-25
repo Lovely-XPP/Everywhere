@@ -1,10 +1,16 @@
 # Everywhere
 
+**简体中文** · [English](README.en.md)
+
 Everywhere 是一款面向 iPhone 和 iPad 的定位模拟工具。你可以在 macOS 或 Windows 控制台的地图上选点，通过 USB 或 Wi-Fi 为已配对的设备设置、更换或清除模拟位置，也可以在移动端遥控主机，并用 Core Location 样本核对设备实际报告的位置。
 
 Everywhere is a location simulation tool for iPhone and iPad. Pick a point on the map in the macOS or Windows console to set, change, or clear a paired device’s simulated location over USB or Wi-Fi. The mobile app can also control the host and show the location the device reports through Core Location.
 
-Apple 端源码位于 `swift/`，Windows Qt 端源码位于 `windows/`。从项目根目录执行 `./package.sh` 导出 Apple 版本；Windows x64 使用 `package-windows.ps1`。
+> **免责声明**
+>
+> 本项目仅供技术测试使用，不得用于任何非法活动。
+
+Apple 端源码位于 `swift/`，Windows Qt 端源码位于 `windows/`。从项目根目录执行 `./package.sh` 导出 Apple 版本；Windows x64 使用 `package-windows.ps1`。Windows 与 Mac 共用 iAP2 协议和软件定位后端，两端均从模式选择进入地图。Windows 的系统配对、USB 信任、Wi-Fi IP 验证与验证范围见 [Windows 使用说明](windows/README.md)。
 
 Mac 上的 SwiftUI 控制台向用户已配对的 iPhone 或 iPad 发出定点和清除请求。Everywhere 内置诊断页，显示本机从 Core Location 收到的位置样本和当前网络路径。手机遥控可以选择 Wi-Fi 或 USB。USB 和 Wi-Fi 都只允许操作已绑定的本机。
 
@@ -180,3 +186,9 @@ Mac、iPhone 和 iPad 的地图上方有搜索和图层菜单，目的地卡片�
 3. 清除后分别记录工具返回时间、首个恢复 A 的新样本时间。拒绝权限、旧缓存样本和默认地点未变化要单独记录。
 
 主机工具回执、系统定位样本、朋友圈界面是三个独立观测。本项目当前没有经真机验收的兼容性组合。
+
+## 致谢
+
+感谢 [DiPlay](https://github.com/shihabal3amri/DiPlay) 的作者和贡献者分享 MFi 配件认证的思路，为 Everywhere 的蓝牙配件模式提供了参考。
+
+感谢 [accessory-location](https://github.com/aur3l14no/accessory-location) 的作者和贡献者分享通过 iAP2 传递位置的思路。Everywhere 的蓝牙 iAP2 客户端也在该项目的基础上改编，具体版本与许可证见[上游声明](swift/Host/IAP2Client/NOTICE)。

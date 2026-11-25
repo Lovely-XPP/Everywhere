@@ -64,8 +64,10 @@ static fire_and_forget readStatus(GattLocalCharacteristic,GattReadRequestedEvent
     }catch(...){}deferral.Complete();
 }
 int main(int argc,char** argv){
-    init_apartment();
     try{
+        init_apartment();
+        if(argc==2 && std::string(argv[1])=="--self-test")
+            return hex(decode("0180ff"))=="0180ff" ? 0 : 1;
         bool status=argc==2 && std::string(argv[1])=="status";
         auto adapter=BluetoothAdapter::GetDefaultAsync().get();
         if(!adapter || !adapter.IsPeripheralRoleSupported())throw std::runtime_error("BLE peripheral role unsupported");

@@ -48,6 +48,8 @@ class BluetoothStream:
                 return
             if re.fullmatch(r"EW_OPEN_ERROR channel=\d{1,2} status=0x[0-9a-f]{8} record=(live|cache) cause=(busy|permission|timeout|other)", line):
                 diagnostic = line
+            elif re.fullmatch(r"EW_WINDOWS_RFCOMM_ERROR status=\d{1,5}", line):
+                diagnostic = line
             elif re.fullmatch(r"EW_(?:BASEBAND|SDP)_ERROR status=0x[0-9a-f]{8}", line):
                 diagnostic = line
         code = await self.process.wait()

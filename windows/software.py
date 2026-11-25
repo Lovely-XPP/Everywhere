@@ -12,12 +12,23 @@ class Software:
         self.backend = backend
         self.devices = {}
         self.visible = {}
+        self.wifi_address = None
 
     def provider(self):
         if self.backend is None:
             import portable_location
             self.backend = portable_location
         return self.backend
+
+    async def verify_address(self, address, expected=None):
+        async with await self.provider().wireless_target(address, expected) as client:
+            return dict(id=client.udid, name=client.short_info.get('DeviceName') or client.udid,
+                        network=True, address=address)
+
+    async def use_address(self, address):
+        row = await self.verify_address(address)
+        self.wifi_address = (address, row['id'])
+        return row['id']
 
     async def scan(self):
         backend = self.provider()
@@ -32,18 +43,33 @@ class Software:
             details = {}
         if details.get('warning'):
             warnings.append("局域网发现受限，请检查网络与防火墙")
-        rows = merge_devices(mux, details.get('devices', []))
+        direct = None
+        if self.wifi_address:
+            try:
+                direct = await self.verify_address(*self.wifi_address)
+            except Exception as exc:
+                warnings.append('未确认手动 Wi-Fi 地址 · '+str(exc))
+        rows = merge_devices(mux, [*details.get('devices', []), *([direct] if direct else [])])
+        if direct:
+            for row in rows:
+                if device_key(row['id']) == device_key(direct['id']):
+                    row['address'] = direct['address']
         visible = {device_key(row['id']):row for row in rows if row['usb'] or row['wifi']}
-        for key in self.visible.keys() - visible.keys():
+        for key, old in self.visible.items():
             session = self.devices.get(key)
-            if session:
+            new = visible.get(key, {})
+            if session and any(old.get(k) and not new.get(k) for k in ('usb', 'wifi')):
+                # Invalidate outstanding confirmations even when the other transport survives.
                 session.revision = str(uuid4())
+                if not session.task or session.task.done() or session.available(session.link, new):
+                    continue
                 if session.active:
                     session.unknown = True
-                if session.task and not session.task.done():
-                    session.stop.set()
+                session.stop.set()
         self.visible = visible
-        return rows, '；'.join(warnings)
+        for row in visible.values():
+            self.get(row['id'])
+        return list(visible.values()), '；'.join(warnings)
 
     def get(self, serial):
         key = device_key(serial)
@@ -70,7 +96,14 @@ class Session:
         self.active = self.unknown = False
         self.revision = str(uuid4())
 
+    @staticmethod
+    def available(link, row):
+        return bool((link in ('auto', 'USB') and row.get('usb')) or
+                    (link in ('auto', 'Network') and row.get('wifi')))
+
     async def open(self, link):
+        if self.task and not self.task.done() and self.stop.is_set():
+            await asyncio.gather(self.task, return_exceptions=True)
         if self.task and not self.task.done():
             if link != 'auto' and link != self.link:
                 raise ValueError("请先恢复定位，再切换执行链路")
@@ -94,7 +127,8 @@ class Session:
                 if self.active:
                     self.unknown = True
                     self.revision = str(uuid4())
-        args = SimpleNamespace(udid=self.serial, transport=link, prepare_wifi=False)
+        args = SimpleNamespace(udid=self.serial, transport=link, prepare_wifi=False,
+                               address=(self.connected() or {}).get('address') if link == 'Network' else None)
         self.task = asyncio.create_task(self.backend.session(args, consumer=consume))
         self.task.add_done_callback(lambda t: None if t.cancelled() else t.exception())
         waiter = asyncio.create_task(ready.wait())
@@ -121,17 +155,18 @@ class Session:
                 raise ValueError('遥控请求已过期')
             if revision is not None and self.revision != revision:
                 raise ValueError("设备会话已变化，请刷新")
-            if coords is not None:
-                row = self.connected() or {}
-                if not ((link != 'Network' and row.get('usb')) or (link != 'USB' and row.get('wifi'))):
-                    raise ValueError("所选设备未通过指定链路连接")
+            row = self.connected() or {}
+            if coords is not None and not self.available(link, row):
+                raise ValueError("所选设备未通过指定链路连接")
+            if link == 'auto' and (not self.task or self.task.done()) and row:
+                link = 'USB' if row.get('usb') else 'Network'
             if coords is not None and self.unknown:
                 raise ValueError("上一次操作结果未知，请先恢复定位")
             # 恢复优先沿用已有会话；失联后才按用户所选链路重新连接。
-            if coords is None and self.task and not self.task.done():
+            if coords is None and self.task and not self.task.done() and not self.stop.is_set():
                 link = self.link
             await self.open(link)
-            if coords is not None and (not self.connected() or self.unknown or
+            if coords is not None and (not self.available(self.link, self.connected() or {}) or self.stop.is_set() or self.unknown or
                                        revision is not None and self.revision != revision):
                 if not self.active:
                     self.stop.set()
@@ -147,6 +182,8 @@ class Session:
             try:
                 call = self.location.clear() if coords is None else self.location.set(*coords)
                 await asyncio.wait_for(call, 20)
+                if self.stop.is_set() or self.location is None:
+                    raise ConnectionError('调用期间设备连接已断开，定位结果未知，请重新连接并恢复')
                 self.active = coords is not None
                 self.unknown = False
             finally:

@@ -105,6 +105,52 @@ class Sessions(unittest.IsolatedAsyncioTestCase):
         await self.device.execute(None)
         self.assertFalse(self.device.unknown)
 
+    async def test_transport_disappears_while_opening(self):
+        async def session(args, consumer):
+            self.sw.visible['aa'] = dict(id='AA', wifi=True)
+            await consumer(None, self.b.location)
+        self.b.session = session
+        with self.assertRaisesRegex(ValueError, '重新确认'):
+            await self.device.execute((1,2), 'USB')
+        self.b.location.set.assert_not_awaited()
+
+    async def test_link_loss_invalidates_confirmation_and_requires_recovery(self):
+        await self.device.execute((1,2))
+        original = self.device.revision
+        self.b.list_devices = AsyncMock(return_value=[])
+        self.b.nearby = AsyncMock(return_value=dict(devices=[dict(id='AA', network=True)]))
+        await self.sw.scan()
+        self.assertTrue(self.device.unknown)
+        self.assertNotEqual(original, self.device.revision)
+        await self.device.task
+        with self.assertRaises(ValueError):
+            await self.device.execute((3,4), 'Network', revision=original)
+        await self.device.execute(None, 'Network')
+        self.assertEqual(self.b.opened, [('AA','USB'),('AA','Network')])
+        self.assertFalse(self.device.unknown)
+
+    async def test_unavailable_transport_never_opens_device(self):
+        with self.assertRaises(ValueError):
+            await self.device.execute((1,2), 'Network')
+        self.assertFalse(self.b.opened)
+
+    async def test_manual_address_is_reverified_for_same_device(self):
+        self.sw.verify_address=AsyncMock(return_value=dict(id='AA', network=True, address='192.0.2.3'))
+        self.b.list_devices=AsyncMock(return_value=[])
+        self.b.nearby=AsyncMock(return_value=dict(devices=[]))
+        self.assertEqual(await self.sw.use_address('192.0.2.3'), 'AA')
+        rows,_=await self.sw.scan()
+        self.sw.verify_address.assert_awaited_with('192.0.2.3','AA')
+        self.assertEqual(rows[0]['address'], '192.0.2.3')
+        self.sw.verify_address.side_effect=ConnectionError('unavailable')
+        rows,_=await self.sw.scan()
+        self.assertEqual(rows,[])
+
+    async def test_remote_rejects_excessive_lifetime(self):
+        result=await self.remote.handle(self.req(expires=time.time()-APPLE_EPOCH+120),'AA')
+        self.assertEqual(result['phase'], 'rejected')
+        self.b.location.set.assert_not_awaited()
+
     async def test_binding(self):
         unbound=await self.remote.handle(self.req('status'))
         self.assertEqual(unbound['targets'],[])

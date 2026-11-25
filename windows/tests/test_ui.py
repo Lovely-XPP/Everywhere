@@ -52,6 +52,14 @@ class DesktopWorkflow(unittest.TestCase):
             desk.map.picked.emit(22.5,114.5)
             desk.apply.click()
             output.set.assert_not_awaited()
+            def changed_while_confirming():
+                desk.devices.setCurrentIndex(desk.devices.findData('TEST-A'))
+                return True
+            desk.confirm_send=changed_while_confirming
+            desk.apply.click()
+            output.set.assert_not_awaited()
+            self.assertNotEqual(desk.devices.itemText(0),desk.devices.itemText(1))
+            desk.devices.setCurrentIndex(desk.devices.findData('TEST-B'))
             desk.confirm_send=lambda:True
             desk.apply.click()
             wait(lambda:not desk.busy)

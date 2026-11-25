@@ -153,8 +153,8 @@ class Remote:
             cached=self.receipts.get(key)
             if cached:
                 return cached[1] if cached[0]==fingerprint else reply('rejected','请求 ID 已被使用')
-            if expires+APPLE_EPOCH<time.time():
-                return reply('rejected','请求已过期')
+            if not 0 <= expires + APPLE_EPOCH - time.time() <= 60:
+                return reply('rejected','请求已过期或有效期超过 60 秒')
             try:
                 expected=str(UUID(req['session']))
                 if action not in ('apply','clear'):
@@ -233,10 +233,9 @@ class Remote:
         return self.key
 
     async def stop(self):
-        if self.server:
-            self.server.close()
-            await self.server.wait_closed()
-            self.server=None
+        server,self.server=self.server,None
+        if server:
+            server.close()
         if self.bonjour:
             await self.bonjour.async_unregister_all_services()
             await self.bonjour.async_close()
@@ -247,6 +246,8 @@ class Remote:
             self.usb=None
         for w in list(self.writers): w.close()
         await asyncio.gather(*list(self.tasks),return_exceptions=True)
+        if server:
+            await server.wait_closed()
 
     async def revoke(self):
         import keyring

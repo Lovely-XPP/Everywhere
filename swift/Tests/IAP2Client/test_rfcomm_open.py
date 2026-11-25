@@ -29,6 +29,11 @@ class OpenTests(unittest.IsolatedAsyncioTestCase):
             await self.launch(f"echo 'system diagnostic' >&2\necho '{record}' >&2\nexit 4")
         self.assertEqual(str(error.exception), record)
 
+    async def test_windows_socket_error_reaches_host(self):
+        record = "EW_WINDOWS_RFCOMM_ERROR status=10060"
+        with self.assertRaisesRegex(RuntimeError, record):
+            await self.launch(f"echo '{record}' >&2\nexit 4")
+
     async def test_stale_cache_reopens_same_target_with_live_lookup(self):
         cached, live = AsyncMock(), AsyncMock()
         cached.cached_channel = True

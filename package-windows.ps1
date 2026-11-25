@@ -43,7 +43,7 @@ try {
     $dest = "$stage/Everywhere"
     Copy-Item "$stage/EverywhereWorker.exe" $dest
     Run 'cl.exe' @('/nologo','/std:c++17','/EHsc','/O2','/MT','/utf-8',"/Fo$temp/rfcomm.obj","/Fe$dest/rfcomm.exe","$win/native/rfcomm.cpp",'ws2_32.lib','Bthprops.lib')
-    Run 'cl.exe' @('/nologo','/std:c++17','/EHsc','/O2','/MT','/utf-8',"/Fo$temp/gatt.obj","/Fe$dest/EverywhereGatt.exe","$win/native/gatt.cpp",'windowsapp.lib')
+    Run 'cl.exe' @('/nologo','/std:c++20','/EHsc','/O2','/MT','/utf-8',"/Fo$temp/gatt.obj","/Fe$dest/EverywhereGatt.exe","$win/native/gatt.cpp",'windowsapp.lib')
     $identityDir = Join-Path $dest 'asset/mfi'
     $null = New-Item -ItemType Directory -Path $identityDir -Force
     Copy-Item "$mfi/certificate.p7b" $identityDir
@@ -55,6 +55,8 @@ try {
     Copy-Item "$root/package-windows.ps1" $src
     Copy-Item $modern "$src/swift/Host/ModernBackend" -Recurse
     Get-ChildItem $src -Directory -Recurse -Filter '__pycache__' | Remove-Item -Recurse -Force
+    Run "$dest/rfcomm.exe" @('--self-test')
+    Run "$dest/EverywhereGatt.exe" @('--self-test')
     Run "$dest/EverywhereWorker.exe" @('--self-test')
     Run "$dest/EverywhereWorker.exe" @('connect','--help')
     if ($EmbedMfiKey) {Run "$dest/EverywhereWorker.exe" @('--verify-bundle')}

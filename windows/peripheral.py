@@ -36,7 +36,8 @@ class Peripheral:
 
     async def peers(self):
         async with self.lock:
-            await self.start()
+            if self.proc is None or self.proc.returncode is not None:
+                raise ConnectionError('请先开启电脑蓝牙广播')
             await self.command('PEERS')
             peers={}
             while (line:=await self.line())!='END':
@@ -45,16 +46,21 @@ class Peripheral:
                     peers.setdefault(device,{})[kind]=int(cap)
             return peers
 
-    async def marker(self,device,code,coords):
+    async def marker(self,device,code,coords,connection=None):
         peers=await self.peers()
         if device not in peers:
             raise ValueError('请选择已订阅的手机')
         caps=peers[device]
         # 新版 iPhone 可仅订阅 RMC 特征，紧凑载荷同样通过已订阅的特征发送。
-        kind='R' if 'R' in caps else 'C'
+        minimum=11 if coords is None else 19
+        kind='R' if caps.get('R',0)>=minimum else 'C'
+        if caps.get(kind,0)<minimum:
+            raise ValueError('手机订阅的蓝牙特征容量不足')
         packet=ble_packet(code,coords,kind=='R',caps[kind]-4)
         nonce=secrets.token_bytes(4)
         async with self.lock:
+            if connection is not None and self.proc is not connection:
+                raise ConnectionError('蓝牙广播连接已变化，请重新确认')
             await self.command(f'SEND {device} {kind} {(nonce+packet).hex()}')
             async with asyncio.timeout(12):
                 while True:

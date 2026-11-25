@@ -32,6 +32,17 @@ class PortableTests(unittest.IsolatedAsyncioTestCase):
                 await portable.connect(udid, "USB", True)
             client.close.assert_awaited_once()
 
+    async def test_address_must_match_existing_paired_phone(self):
+        client = SimpleNamespace(paired=True, udid="AB-CD", short_info={"DeviceClass":"iPhone"}, close=AsyncMock())
+        with patch.object(portable, "create_using_mobdev2", AsyncMock(return_value=client)) as connect:
+            self.assertIs(await portable.wireless_target("192.0.2.1", "AB-CD"), client)
+            connect.assert_awaited_once_with(hostname="192.0.2.1", udid="AB-CD")
+            with self.assertRaises(portable.Rejected):
+                await portable.wireless_target("192.0.2.1", "OTHER")
+            client.close.assert_awaited_once()
+            with self.assertRaises(ValueError):
+                await portable.wireless_target("example.com")
+
     async def test_bonjour_matches_reported_udid_only(self):
         wrong = SimpleNamespace(udid="another", close=AsyncMock())
         right = SimpleNamespace(udid="00008030-001122334455AABB", close=AsyncMock())

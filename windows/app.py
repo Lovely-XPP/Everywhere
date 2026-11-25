@@ -15,7 +15,7 @@ ROOT=Path(__file__).resolve().parents[1]
 if not getattr(sys,'frozen',False):
     sys.path.insert(0,str(ROOT/'swift/Host/ModernBackend'))
 
-from appearance import Dropdown, style
+from appearance import Dropdown, ModeCard, style
 from core import device_key,point
 from software import Software
 from bluetooth_host import Bluetooth
@@ -62,10 +62,11 @@ class Desk(W.QMainWindow):
         self.resize(1120,720)
         self.settings=C.QSettings()
         self.jobs=Jobs()
-        self.jobs.notice.connect(self.log)
+        self.jobs.notice.connect(self.log, C.Qt.QueuedConnection)
         self.soft=Software()
         self.jobs.link_changed.connect(self.controls, C.Qt.QueuedConnection)
         self.bt=Bluetooth(self.bt_event, changed=self.jobs.link_changed.emit)
+        self.reverse_started=False
         self.reverse=Peripheral(self.bt.bundle)
         self.beacon=Peripheral(self.bt.bundle)
         self.remote=Remote(self.soft,self.jobs.notice.emit)
@@ -88,10 +89,11 @@ class Desk(W.QMainWindow):
         title.setStyleSheet('font-size:30px;font-weight:650')
         col.addWidget(title)
         cards=W.QHBoxLayout()
-        for mode,label in [('classic','蓝牙模式\n连接 iAP2 配件或手机 App'),('software','软件模拟模式\n自动识别 USB 和 Wi-Fi 设备')]:
-            card=button(label,lambda checked=False,k=mode:self.enter(k))
-            card.setObjectName('modeCard')
-            card.setMinimumHeight(120)
+        for mode, title, detail in (
+                ('classic','蓝牙模式','iAP2 配件定位与手机 App 蓝牙连接'),
+                ('software','软件模拟模式','通过 USB 或 Wi-Fi 连接 iPhone')):
+            card=ModeCard(title, detail, bluetooth=mode=='classic')
+            card.clicked.connect(lambda checked=False,k=mode:self.enter(k))
             cards.addWidget(card)
         col.addLayout(cards)
         col.addStretch()
@@ -144,6 +146,7 @@ class Desk(W.QMainWindow):
             scroll.setWidgetResizable(True)
             scroll.setFrameShape(W.QFrame.NoFrame)
             widget=W.QWidget()
+            widget.setObjectName('inspectorPage')
             column=W.QVBoxLayout(widget)
             column.setAlignment(C.Qt.AlignTop)
             scroll.setWidget(widget)
@@ -165,6 +168,7 @@ class Desk(W.QMainWindow):
         device.addWidget(self.roles)
         self.pair=button('连接新 iPhone',self.discover_phone)
         self.pair.setObjectName('deviceCard')
+        self.pair.setMinimumHeight(44)
         device.addWidget(self.pair)
         self.device_label=W.QLabel()
         self.device_label.setObjectName('caption')
@@ -182,6 +186,8 @@ class Desk(W.QMainWindow):
         for label,k in [('自动 · 优先 USB','auto'),('仅 USB','USB'),('仅 Wi-Fi','Network')]:
             self.transport.addItem(label,k)
         device.addWidget(self.transport)
+        self.wifi_address=button('通过 Wi-Fi IP 验证设备',self.select_wifi_address)
+        device.addWidget(self.wifi_address)
         self.prepare=button('信任设备并启用 Wi-Fi',self.prepare_wifi)
         device.addWidget(self.prepare)
         self.code=W.QLineEdit()
@@ -255,6 +261,8 @@ class Desk(W.QMainWindow):
 
     def enter(self,mode):
         self.epoch+=1
+        self.reverse_started=False
+        self.preferred_device=None
         self.mode=mode
         self.devices.clear()
         self.catalog={}
@@ -279,22 +287,27 @@ class Desk(W.QMainWindow):
         self.remote_button.setVisible(sw)
         self.remote_button.setEnabled(not self.busy)
         self.transport.setVisible(sw)
+        self.wifi_address.setVisible(sw and self.transport.currentData()=='Network')
+        self.wifi_address.setEnabled(not self.busy and not self.scanning)
         self.prepare.setVisible(sw)
         row=self.catalog.get(self.devices.currentData(),{})
         self.prepare.setEnabled(ready and row.get('usb',False))
         self.device_label.setText('已有iPhone连接' if classic else '目标设备')
         self.pair.setVisible(classic)
         self.pair.setEnabled(not self.busy and not self.scanning and not self.bt.classic_id)
-        self.ble_connect.setVisible(self.mode=='central')
-        self.ble_connect.setEnabled(ready and not self.bt.ble_id)
+        reverse = self.mode == 'reverse'
+        self.ble_connect.setVisible(self.mode == 'central' or reverse)
+        self.ble_connect.setText('开启电脑蓝牙广播' if reverse else '连接手机')
+        self.ble_connect.setEnabled(not self.busy and not self.reverse_started if reverse else ready and not self.bt.ble_id)
         self.jitter.setVisible(classic)
         self.code.setVisible(not sw and not classic)
-        self.stop.setVisible(self.mode in ('classic','central'))
+        self.stop.setVisible(not sw)
+        self.stop.setText('停止广播' if reverse else '断开连接')
         linked = bool(self.bt.classic_id or self.bt.ble_id)
-        self.stop.setEnabled(not self.busy and linked)
+        self.stop.setEnabled(not self.busy and (linked or self.reverse_started))
         self.devices.setEnabled(not self.busy and not linked)
         self.roles.setEnabled(not self.busy and not linked)
-        self.refresh.setEnabled(not self.busy and not self.scanning and not linked)
+        self.refresh.setEnabled(not self.busy and not self.scanning and not linked and (not reverse or self.reverse_started))
         self.refresh.setText('刷新中…' if self.scanning else '刷新设备')
         try:
             self.coords()
@@ -323,13 +336,21 @@ class Desk(W.QMainWindow):
             return self.bt.ready and self.bt.classic_id==dev
         code=self.code.text()
         return (len(code)==6 and code.isascii() and code.isdigit() and
-                (self.mode=='reverse' or self.bt.ble_id==dev))
+                (self.reverse_started and self.reverse.proc is not None and self.reverse.proc.returncode is None if self.mode=='reverse' else self.bt.ble_id==dev))
 
     def device_activated(self,index):
         if self.mode=='classic' and index>=0:
             self.connect_selected()
 
     def connect_selected(self):
+        if self.mode == 'reverse':
+            def started(_, error):
+                self.reverse_started = not error
+                if self.reverse_started:
+                    self.log('广播已开启，请用手机 Everywhere 扫描并连接这台电脑')
+                    self.scan()
+            self.job(self.reverse.start(), started)
+            return
         dev=self.devices.currentData()
         if not dev or self.busy:
             return
@@ -382,6 +403,7 @@ class Desk(W.QMainWindow):
         self.jobs.submit(coro,end)
 
     def scan(self, checked=False, *, automatic=False):
+        if self.mode == 'reverse' and not self.reverse_started: return
         if self.scanning or self.busy or self.bt.classic_id or self.bt.ble_id or self.closing: return
         self.scanning=True
         self.controls()
@@ -398,18 +420,24 @@ class Desk(W.QMainWindow):
                 self.controls()
                 if self.stack.currentIndex()==1:self.scan()
                 return
-            old=self.devices.currentData()
+            old=getattr(self, 'preferred_device', None) or self.devices.currentData()
+            self.preferred_device=None
             rows,msg=result if result else ([],error)
             catalog={r['id']:r for r in rows}
             if not automatic:
                 change='列表无变化 · ' if self.catalog==catalog else ''
                 self.refresh_result.setText(time.strftime('%H:%M:%S')+' 已刷新 · '+change+f'{len(rows)} 台设备' if not error else '刷新失败 · '+error)
+            if mode == 'reverse' and error and (not self.reverse.proc or self.reverse.proc.returncode is not None):
+                self.reverse_started=False
             self.catalog=catalog
             self.devices.blockSignals(True)
             self.devices.clear()
             for row in rows:
                 links=' / '.join(label for k,label in [('usb','USB'),('wifi','Wi-Fi')] if row.get(k))
-                self.devices.addItem(f"{row['name']}   {links}",row['id'])
+                identity = row['id']
+                detail = identity[-8:] if mode == 'software' else identity if mode == 'classic' else ''
+                self.devices.addItem(' · '.join(v for v in (row['name'], links, detail) if v), identity)
+                self.devices.setItemData(self.devices.count()-1, identity, C.Qt.ToolTipRole)
             ix=self.devices.findData(old) if old else -1
             if ix>=0:self.devices.setCurrentIndex(ix)
             elif old or len(rows)!=1 or mode=="classic":self.devices.setCurrentIndex(-1)
@@ -427,6 +455,16 @@ class Desk(W.QMainWindow):
         new=self.roles.itemData(index)
         self.epoch+=1
         self.job(self.shutdown_links(),lambda _,err:None if err else self.enter(new))
+
+    def select_wifi_address(self):
+        address,ok=W.QInputDialog.getText(self,'验证 Wi-Fi 设备','已信任 iPhone 的 IPv4 或 IPv6 地址')
+        if not ok or not address.strip():
+            return
+        def checked(serial,error):
+            if not error:
+                self.preferred_device=serial
+                self.scan()
+        self.job(self.soft.use_address(address.strip()),checked)
 
     def prepare_wifi(self):
         serial=self.devices.currentData()
@@ -452,7 +490,9 @@ class Desk(W.QMainWindow):
         mode,epoch=self.mode,self.epoch
         code,jitter,link=self.code.text(),self.jitter.isChecked(),self.transport.currentData()
         proc,generation,client=self.bt.proc,self.bt.generation,self.bt.ble
-        session=self.soft.get(dev) if mode=='software' else None
+        broadcast=self.reverse.proc
+        session=self.soft.devices.get(device_key(dev)) if mode=='software' else None
+        if mode=='software' and session is None: return
         revision=session.revision if session else None
         try:
             coords=None if recover else self.coords()
@@ -472,7 +512,7 @@ class Desk(W.QMainWindow):
                 await self.bt.update_point(dev,coords,jitter,proc,generation)
                 return '选点已提交，等待手机订阅和链路回执'
             if mode=='reverse':
-                await self.reverse.marker(dev,code,coords)
+                await self.reverse.marker(dev,code,coords,broadcast)
             else:
                 await self.bt.marker(dev,code,coords,client)
             return '手机 App 已确认更新标记'
@@ -493,7 +533,12 @@ class Desk(W.QMainWindow):
 
     def stop_bt(self):
         def done(_,error):
-            if not error:self.log('蓝牙会话已结束，请在手机核对最新位置')
+            if not error:
+                if self.mode == 'reverse':
+                    self.reverse_started=False
+                    self.catalog.clear()
+                    self.devices.clear()
+                self.log('蓝牙会话已结束，请在手机核对最新位置')
         self.job(self.shutdown_links(),done)
 
     def leave(self):
@@ -649,7 +694,8 @@ def main():
     w=Desk()
     if smoke:
         import portable_location
-        import bleak
+        from bleak.backends.winrt.client import BleakClientWinRT
+        from bleak.backends.winrt.scanner import BleakScannerWinRT
         import keyring.backends.Windows
         from remote import tls_context
         tls_context('0'*32,True)

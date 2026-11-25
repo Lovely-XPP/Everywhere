@@ -12,7 +12,8 @@ class ReconnectTests(unittest.IsolatedAsyncioTestCase):
     async def test_backoff_and_terminal_failures(self):
         args = SimpleNamespace(until_stopped=True, stdin_updates=True)
         retry = "EW_OPEN_ERROR channel=7 status=0xe00002d5 record=live cause=busy"
-        for error, count in [(RuntimeError(retry), 3), (RuntimeError("Accessory authentication failed"), 1),
+        for error, count in [(RuntimeError(retry), 3), (RuntimeError("EW_WINDOWS_RFCOMM_ERROR status=10060"), 3),
+                             (RuntimeError("EW_WINDOWS_RFCOMM_ERROR status=10013"), 1), (RuntimeError("Accessory authentication failed"), 1),
                              (RuntimeError("iAP2 service unavailable"), 1), (RuntimeError("Selected device is not paired"), 1)]:
             attempts = AsyncMock(side_effect=error)
             with patch.object(cli, "run_connection", attempts), patch.object(cli, "emit"), \

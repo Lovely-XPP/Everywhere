@@ -70,7 +70,7 @@ class Bluetooth:
             raise ValueError("请先连接所选手机")
         packet = ble_packet(code, coords, client.services.get_characteristic(RMC) is not None,
                             max(20, client.mtu_size - 3))
-        await client.write_gatt_char(COMMAND, packet, response=True)
+        await asyncio.wait_for(client.write_gatt_char(COMMAND, packet, response=True), 35)
 
     async def disconnect_ble(self):
         client = self.ble
@@ -129,34 +129,41 @@ class Bluetooth:
                 'location_requested':'手机已请求位置','location_stopped':'手机已停止请求位置',
                 'reconnecting':'连接中断，正在重连','reconnected':'已重连，请重新确认选点',
                 'target_updated':'选点已更新','finished':'iAP2 会话已结束'}
+        detail=None
         error_task=asyncio.create_task(proc.stderr.read())
-        while line:=await proc.stdout.readline():
-            try:
-                row=json.loads(line.decode('utf-8','replace'))
-            except ValueError:
-                continue
-            kind=row.get('event')
-            if kind=='reconnecting':
-                self.generation=row['generation']
-                self.identified = self.authenticated = self.updating = False
-            elif kind == 'identification_accepted':
-                self.identified = True
-            elif kind == 'authentication_succeeded':
-                self.authenticated = True
-            elif kind == 'target_updated':
-                self.updating = False
-            elif kind in ('error', 'finished'):
-                self.identified = self.authenticated = False
-            if kind in ('identification_accepted', 'authentication_succeeded', 'target_updated', 'reconnecting', 'finished', 'error'):
-                self.changed()
-            if kind=='location_link_acknowledged':
-                self.report(f"链路回执 {row['count']} · {row['latitude']:.7f}, {row['longitude']:.7f}")
-            elif kind=='error':
-                self.report(row.get('detail','iAP2 错误'))
-            elif kind in labels:
-                self.report(labels[kind])
+        try:
+            while line:=await proc.stdout.readline():
+                try:
+                    row=json.loads(line.decode('utf-8','replace'))
+                except ValueError:
+                    continue
+                kind=row.get('event')
+                if kind=='reconnecting':
+                    self.generation=row['generation']
+                    self.identified = self.authenticated = self.updating = False
+                elif kind == 'identification_accepted':
+                    self.identified = True
+                elif kind == 'authentication_succeeded':
+                    self.authenticated = True
+                elif kind == 'target_updated':
+                    self.updating = False
+                elif kind in ('error', 'finished'):
+                    self.identified = self.authenticated = False
+                if kind in ('identification_accepted', 'authentication_succeeded', 'target_updated', 'reconnecting', 'finished', 'error'):
+                    self.changed()
+                if kind=='location_link_acknowledged':
+                    self.report(f"链路回执 {row['count']} · {row['latitude']:.7f}, {row['longitude']:.7f}")
+                elif kind=='error':
+                    detail=row.get('detail','iAP2 错误')
+                    self.report(detail)
+                elif kind in labels:
+                    self.report(labels[kind])
+        finally:
+            if not proc.stdout.at_eof():
+                error_task.cancel()
+                await asyncio.gather(error_task, return_exceptions=True)
         error=(await error_task).decode(errors='replace').strip()
-        if await proc.wait():
+        if await proc.wait() and not detail:
             self.report(error[-240:] or 'iAP2 会话异常结束，请核对手机样本')
 
     async def stop(self):
@@ -165,7 +172,16 @@ class Bluetooth:
             try:
                 await asyncio.wait_for(self.proc.wait(),6)
             except TimeoutError:
-                self.proc.terminate()
+                # The frozen console worker owns both the signer and the RFCOMM bridge.
+                if os.name == 'nt' and self.proc.returncode is None:
+                    killer=await asyncio.create_subprocess_exec(
+                        str(Path(os.environ['SystemRoot'])/'System32'/'taskkill.exe'),
+                        '/PID', str(self.proc.pid), '/T', '/F', stdout=asyncio.subprocess.DEVNULL,
+                        stderr=asyncio.subprocess.DEVNULL, creationflags=NO_WINDOW)
+                    await killer.wait()
+                if self.proc.returncode is None:
+                    try: self.proc.kill()
+                    except ProcessLookupError: pass
                 await self.proc.wait()
         if self.reader:
             await self.reader

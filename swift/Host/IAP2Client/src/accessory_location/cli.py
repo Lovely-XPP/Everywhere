@@ -27,6 +27,8 @@ def transient_link_failure(error):
     if isinstance(error, (EOFError, ConnectionError, TimeoutError)):
         return True
     detail = str(error)
+    if detail.startswith("EW_WINDOWS_RFCOMM_ERROR "):
+        return detail.split()[-1] in {"status=10053", "status=10054", "status=10060"}
     if not detail.startswith(("EW_BASEBAND_ERROR ", "EW_SDP_ERROR ", "EW_OPEN_ERROR ")):
         return False
     transient = {"status=0xe00002c5", "status=0xe00002cd", "status=0xe00002d5",
@@ -88,6 +90,9 @@ async def run_connection(args, parent, generation, delivery):
         recovery_deadline = asyncio.get_running_loop().time() + 120
         updates = bytearray()
         while (remaining := deadline - asyncio.get_running_loop().time()) > 0:
+            if (args.command == "connect" and not (identified and authenticated)
+                    and asyncio.get_running_loop().time() >= recovery_deadline):
+                raise TimeoutError("iAP2 identification or accessory authentication timed out")
             if generation and not recovery_ready and asyncio.get_running_loop().time() >= recovery_deadline:
                 raise TimeoutError("Reconnect handshake timed out")
             if args.until_stopped and os.getppid() != parent:
