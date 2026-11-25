@@ -1,0 +1,44 @@
+# SwiftPM、Xcode 本地构建和个人设置
+.build/
+.swiftpm/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcresult/
+*.xcarchive/
+
+# 两个平台的构建、运行时和分发产物
+/Build/
+Everywhere.app/
+Everywhere*.ipa
+Everywhere-macOS.zip
+Everywhere-Windows-x64-*.zip
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Visual Studio 本地设置和原生蓝牙桥编译产物
+.vs/
+*.obj
+*.pdb
+*.ilk
+
+# 系统生成的本地文件
+Thumbs.db
+Desktop.ini
+.DS_Store
+._*
+
+# 仅保存在本机的配件身份、签名材料和密码
+/asset/mfi/
+/asset/ios-signing/
+/offline-mfi
+certificate.p7b
+*.pk8
+*.p12
+*.pfx
+*.mobileprovision
+p12-password

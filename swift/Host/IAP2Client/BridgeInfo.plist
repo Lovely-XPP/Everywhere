@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+    <key>CFBundleIdentifier</key><string>com.virtuallocation.iap2bridge</string>
+    <key>CFBundleName</key><string>Everywhere Bluetooth Bridge</string>
+    <key>NSBluetoothAlwaysUsageDescription</key><string>读取本机蓝牙控制器并连接你选择的 iPhone，以检测 iAP2 会话和传输定位数据。</string>
+</dict></plist>

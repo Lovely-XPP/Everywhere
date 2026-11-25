@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>检测本机系统定位样本的软件模拟和外部配件来源，结果仅在此设备显示。</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-central</string>
+		<string>bluetooth-peripheral</string>
+	</array>
+	<key>NSBluetoothAlwaysUsageDescription</key><string>通过蓝牙接收 Mac 发送的应用位置并确认命令。</string>
+    <key>NSBonjourServices</key>
+	<array>
+		<string>_vloc-remote._tcp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>发现并连接你配对的 Mac，仅对已绑定的本机发送定位请求。</string>
+</dict>
+</plist>

@@ -1,0 +1,9 @@
+accessory-location — https://github.com/aur3l14no/accessory-location
+Revision: 8a13296a3d81dae18ad4481e7a9eca913c2c644f
+License: GPL-3.0-only (see LICENSE).
+Everywhere adaptation: 2026-11-24. The bundled CLI is Bluetooth-only.
+The original USB backend and its pymobiledevice3 dependency are omitted.
+Pairing, authentication, location subscription and delivery remain distinct.
+The bundled macOS authentication provider uses the matching credential in Contents/Resources/asset/mfi by default.
+An explicitly selected external provider can also manage its own identity.
+Corresponding source and build instructions are included in source.tar.gz.

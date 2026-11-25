@@ -1,0 +1,255 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		010000000000000000000001 /* LocationProbeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000001 /* LocationProbeApp.swift */; };
+		010000000000000000000002 /* LocationProbeModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000002 /* LocationProbeModel.swift */; };
+		010000000000000000000003 /* LocationObservation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000003 /* LocationObservation.swift */; };
+		010000000000000000000031 /* LocationSourceReadout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000031 /* LocationSourceReadout.swift */; };
+		010000000000000000000005 /* NetworkProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000005 /* NetworkProbe.swift */; };
+		010000000000000000000036 /* LocationDiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000036 /* LocationDiagnosticsView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		020000000000000000000001 /* LocationProbeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationProbeApp.swift; sourceTree = "<group>"; };
+		020000000000000000000002 /* LocationProbeModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../Mobile/Mobile/Diagnostics/LocationProbeModel.swift; sourceTree = SOURCE_ROOT; };
+		020000000000000000000003 /* LocationObservation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../Mobile/Mobile/Diagnostics/LocationObservation.swift; sourceTree = SOURCE_ROOT; };
+		020000000000000000000031 /* LocationSourceReadout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../Mobile/Mobile/Diagnostics/LocationSourceReadout.swift; sourceTree = SOURCE_ROOT; };
+		020000000000000000000005 /* NetworkProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../Mobile/Mobile/Diagnostics/NetworkProbe.swift; sourceTree = SOURCE_ROOT; };
+		020000000000000000000036 /* LocationDiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../Mobile/Mobile/Diagnostics/LocationDiagnosticsView.swift; sourceTree = SOURCE_ROOT; };
+		020000000000000000000004 /* LocationProbe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LocationProbe.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		030000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		040000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				040000000000000000000002 /* LocationProbe */,
+				040000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		040000000000000000000002 /* LocationProbe */ = {
+			isa = PBXGroup;
+			children = (
+				020000000000000000000001 /* LocationProbeApp.swift */,
+				020000000000000000000002 /* LocationProbeModel.swift */,
+				020000000000000000000003 /* LocationObservation.swift */,
+				020000000000000000000031 /* LocationSourceReadout.swift */,
+				020000000000000000000005 /* NetworkProbe.swift */,
+				020000000000000000000036 /* LocationDiagnosticsView.swift */,
+			);
+			path = LocationProbe;
+			sourceTree = "<group>";
+		};
+		040000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				020000000000000000000004 /* LocationProbe.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		050000000000000000000001 /* LocationProbe */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0A0000000000000000000002 /* Build configuration list for PBXNativeTarget "LocationProbe" */;
+			buildPhases = (
+				060000000000000000000001 /* Sources */,
+				030000000000000000000001 /* Frameworks */,
+				070000000000000000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LocationProbe;
+			productName = LocationProbe;
+			productReference = 020000000000000000000004 /* LocationProbe.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		080000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				TargetAttributes = {
+					050000000000000000000001 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 0A0000000000000000000001 /* Build configuration list for PBXProject "LocationProbe" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = "zh-Hans";
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				"zh-Hans",
+				Base,
+				en,
+			);
+			mainGroup = 040000000000000000000001;
+			productRefGroup = 040000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				050000000000000000000001 /* LocationProbe */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		070000000000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		060000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				010000000000000000000001 /* LocationProbeApp.swift in Sources */,
+				010000000000000000000002 /* LocationProbeModel.swift in Sources */,
+				010000000000000000000003 /* LocationObservation.swift in Sources */,
+				010000000000000000000031 /* LocationSourceReadout.swift in Sources */,
+				010000000000000000000005 /* NetworkProbe.swift in Sources */,
+				010000000000000000000036 /* LocationDiagnosticsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		090000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		090000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		090000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = ../Mobile/Mobile/Diagnostics/WiFi.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "定位诊断";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "读取当前定位样本用于真机诊断，不会保存或上传真实位置轨迹。";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.virtuallocation.locationprobe;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		090000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = ../Mobile/Mobile/Diagnostics/WiFi.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "定位诊断";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "读取当前定位样本用于真机诊断，不会保存或上传真实位置轨迹。";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.virtuallocation.locationprobe;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0A0000000000000000000001 /* Build configuration list for PBXProject "LocationProbe" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				090000000000000000000001 /* Debug */,
+				090000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0A0000000000000000000002 /* Build configuration list for PBXNativeTarget "LocationProbe" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				090000000000000000000003 /* Debug */,
+				090000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 080000000000000000000001 /* Project object */;
+}
