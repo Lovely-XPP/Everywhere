@@ -74,134 +74,144 @@ def pending_input():
 
 async def run_connection(args, parent, generation, delivery):
     """每次使用新的 RFCOMM、认证程序、协商序列号与位置订阅。"""
-    hold_target = generation > 0 or args.command == "connect"
     link = None
     auth = AuthenticationProvider(args.auth_helper) if args.auth_helper else None
     try:
         local_address = await controller_address(args.bluetooth_helper)
         stream = await BluetoothStream.open_detected(args.bluetooth_helper, args.device, emit)
         link = Link(stream, emit)
-        await link.handshake()
-        deadline = math.inf if args.until_stopped else asyncio.get_running_loop().time() + args.duration
-        active, last_sent, intervals = set(), {}, {}
-        identified = False
-        authenticated = False
-        recovery_ready = False
-        recovery_deadline = asyncio.get_running_loop().time() + 120
-        updates = bytearray()
-        while (remaining := deadline - asyncio.get_running_loop().time()) > 0:
-            if (args.command == "connect" and not (identified and authenticated)
-                    and asyncio.get_running_loop().time() >= recovery_deadline):
-                raise TimeoutError("iAP2 identification or accessory authentication timed out")
-            if generation and not recovery_ready and asyncio.get_running_loop().time() >= recovery_deadline:
-                raise TimeoutError("Reconnect handshake timed out")
-            if args.until_stopped and os.getppid() != parent:
-                break
-            if getattr(args, "stdin_updates", False) and pending_input():
-                chunk = os.read(0, 4096)
-                if not chunk:
-                    break
-                updates.extend(chunk)
-                while b"\n" in updates:
-                    line, _, rest = updates.partition(b"\n")
-                    updates = bytearray(rest)
-                    target = json.loads(line)
-                    if target.get("generation", 0) != generation or (generation and not recovery_ready):
-                        continue
-                    if args.command == "connect" and not (identified and authenticated):
-                        continue
-                    lat, lon = target["latitude"], target["longitude"]
-                    coordinate(lat, True)
-                    coordinate(lon, False)
-                    args.latitude, args.longitude = lat, lon
-                    if "jitter" in target:
-                        args.jitter = target["jitter"] is True
-                    hold_target = False
-                    emit(event="target_updated")
-                if len(updates) > 4096:
-                    raise ValueError("Oversized coordinate update")
-            try:
-                message = await link.receive(min(0.25, remaining))
-            except TimeoutError:
-                message = None
-            if message is not None:
-                fields = parameters(message.body)
-                emit(
-                    event="message",
-                    identifier=f"0x{message.identifier:04x}",
-                    parameters=[{"id": i, "bytes": len(b)} for i, b in fields],
-                )
-                if message.identifier == 0x1D00:
-                    await link.send(identity(args.transport, local_address))
-                elif message.identifier == 0x1D02:
-                    identified = True
-                    emit(event="identification_accepted")
-                elif message.identifier == 0x1D03:
-                    raise RuntimeError(f"Identification rejected: {[i for i, _ in fields]}")
-                elif message.identifier == 0xAA00:
-                    if auth is None:
-                        raise RuntimeError(
-                            "Accessory authentication required; no credential configured"
-                        )
-                    await link.send(await auth.certificate())
-                elif message.identifier == 0xAA02:
-                    if auth is None:
-                        raise RuntimeError(
-                            "Accessory authentication required; no credential configured"
-                        )
-                    challenges = [b for i, b in fields if i == 0]
-                    if len(challenges) != 1:
-                        raise RuntimeError("Invalid authentication challenge parameters")
-                    await link.send(await auth.sign(challenges[0]))
-                elif message.identifier == 0xAA05:
-                    authenticated = True
-                    emit(event="authentication_succeeded")
-                elif message.identifier == 0xAA04:
-                    raise RuntimeError("Accessory authentication failed")
-                elif message.identifier == 0xFFFA:
-                    active = {i for i, b in fields if i in (1, 2) and not b}
-                    intervals = {
-                        i - 0x8000: max(1.0, int.from_bytes(b, "big") / 1000)
-                        for i, b in fields
-                        if i in (0x8001, 0x8002) and len(b) == 4
-                    }
-                    last_sent.clear()
-                    emit(event="location_requested", sentences=sorted(active))
-                elif message.identifier == 0xFFFC:
-                    active.clear()
-                    emit(event="location_stopped")
-            if generation and identified and authenticated and not recovery_ready:
-                recovery_ready = True
-                emit(event="reconnected", needs_confirmation=hold_target)
-            if args.command in ("send", "connect") and identified and authenticated and active and not hold_target:
-                now = asyncio.get_running_loop().time()
-                due = sorted(
-                    i
-                    for i in active
-                    if now - last_sent.get(i, -math.inf) >= max(args.interval, intervals.get(i, 1))
-                )
-                if due:
-                    latitude, longitude = args.latitude, args.longitude
-                    if args.jitter:
-                        latitude, longitude = jittered_point(latitude, longitude)
-                    sentences = location_sentences(latitude, longitude)
-                    await link.send(location_message([sentences[i] for i in due]))
-                    last_sent.update({i: now for i in due})
-                    delivery.count += 1
-                    emit(event="location_link_acknowledged", count=delivery.count,
-                         latitude=latitude, longitude=longitude, sentences=due)
-        emit(
-            event="finished",
-            identified=identified,
-            authenticated=authenticated,
-            location_packets_acknowledged=delivery.count,
-            phone_location_verified=False,
-        )
+        await exchange(args, generation, delivery, link, auth, local_address, emit,
+                       lambda: os.getppid() == parent,
+                       lambda: os.read(0, 4096) if pending_input() else None)
     finally:
         if link is not None:
             await link.close()
         if auth is not None:
             await auth.close()
+
+
+async def exchange(args, generation, delivery, link, auth, local_address, emit, alive, read_update):
+    """在已检测的字节流上执行握手、认证和位置订阅。调用方负责关闭连接。
+
+    read_update 非阻塞返回一段换行分隔的坐标命令，None 表示暂无更新，空字节表示结束。
+    """
+    hold_target = generation > 0 or args.command == "connect"
+    await link.handshake()
+    deadline = math.inf if args.until_stopped else asyncio.get_running_loop().time() + args.duration
+    active, last_sent, intervals = set(), {}, {}
+    identified = False
+    authenticated = False
+    recovery_ready = False
+    recovery_deadline = asyncio.get_running_loop().time() + 120
+    updates = bytearray()
+    while (remaining := deadline - asyncio.get_running_loop().time()) > 0:
+        if (args.command == "connect" and not (identified and authenticated)
+                and asyncio.get_running_loop().time() >= recovery_deadline):
+            raise TimeoutError("iAP2 identification or accessory authentication timed out")
+        if generation and not recovery_ready and asyncio.get_running_loop().time() >= recovery_deadline:
+            raise TimeoutError("Reconnect handshake timed out")
+        if args.until_stopped and not alive():
+            break
+        chunk = read_update() if getattr(args, "stdin_updates", False) else None
+        if chunk is not None:
+            if not chunk:
+                break
+            updates.extend(chunk)
+            while b"\n" in updates:
+                line, _, rest = updates.partition(b"\n")
+                updates = bytearray(rest)
+                target = json.loads(line)
+                if target.get("generation", 0) != generation or (generation and not recovery_ready):
+                    continue
+                if args.command == "connect" and not (identified and authenticated):
+                    continue
+                lat, lon = target["latitude"], target["longitude"]
+                coordinate(lat, True)
+                coordinate(lon, False)
+                args.latitude, args.longitude = lat, lon
+                if "jitter" in target:
+                    args.jitter = target["jitter"] is True
+                hold_target = False
+                emit(event="target_updated")
+            if len(updates) > 4096:
+                raise ValueError("Oversized coordinate update")
+        try:
+            message = await link.receive(min(0.25, remaining))
+        except TimeoutError:
+            message = None
+        if message is not None:
+            fields = parameters(message.body)
+            emit(
+                event="message",
+                identifier=f"0x{message.identifier:04x}",
+                parameters=[{"id": i, "bytes": len(b)} for i, b in fields],
+            )
+            if message.identifier == 0x1D00:
+                await link.send(identity(args.transport, local_address))
+            elif message.identifier == 0x1D02:
+                identified = True
+                emit(event="identification_accepted")
+            elif message.identifier == 0x1D03:
+                raise RuntimeError(f"Identification rejected: {[i for i, _ in fields]}")
+            elif message.identifier == 0xAA00:
+                if auth is None:
+                    raise RuntimeError(
+                        "Accessory authentication required; no credential configured"
+                    )
+                await link.send(await auth.certificate())
+            elif message.identifier == 0xAA02:
+                if auth is None:
+                    raise RuntimeError(
+                        "Accessory authentication required; no credential configured"
+                    )
+                challenges = [b for i, b in fields if i == 0]
+                if len(challenges) != 1:
+                    raise RuntimeError("Invalid authentication challenge parameters")
+                await link.send(await auth.sign(challenges[0]))
+            elif message.identifier == 0xAA05:
+                authenticated = True
+                emit(event="authentication_succeeded")
+            elif message.identifier == 0xAA04:
+                raise RuntimeError("Accessory authentication failed")
+            elif message.identifier == 0xFFFA:
+                active = {i for i, b in fields if i in (1, 2) and not b}
+                intervals = {
+                    i - 0x8000: max(1.0, int.from_bytes(b, "big") / 1000)
+                    for i, b in fields
+                    if i in (0x8001, 0x8002) and len(b) == 4
+                }
+                last_sent.clear()
+                emit(event="location_requested", sentences=sorted(active))
+            elif message.identifier == 0xFFFC:
+                active.clear()
+                emit(event="location_stopped")
+        if generation and identified and authenticated and not recovery_ready:
+            recovery_ready = True
+            emit(event="reconnected", needs_confirmation=hold_target)
+        if args.command in ("send", "connect") and identified and authenticated and active and not hold_target:
+            now = asyncio.get_running_loop().time()
+            due = sorted(
+                i
+                for i in active
+                if now - last_sent.get(i, -math.inf) >= max(args.interval, intervals.get(i, 1))
+            )
+            if due:
+                latitude, longitude = args.latitude, args.longitude
+                if args.jitter:
+                    latitude, longitude = jittered_point(latitude, longitude)
+                sentences = location_sentences(latitude, longitude)
+                await link.send(location_message([sentences[i] for i in due]))
+                last_sent.update({i: now for i in due})
+                delivery.count += 1
+                emit(event="location_link_acknowledged", count=delivery.count,
+                     latitude=latitude, longitude=longitude, sentences=due)
+    emit(
+        event="finished",
+        identified=identified,
+        authenticated=authenticated,
+        location_packets_acknowledged=delivery.count,
+        phone_location_verified=False,
+    )
 
 
 def main():

@@ -15,7 +15,12 @@ struct IAP2ConfigurationView: View {
                     session.connectPhone(address: address, name: name, helper: helper)
                 }
             } else {
-                sessionControls
+                VStack(alignment: .leading, spacing: 10) {
+                    sessionControls
+                    if session.running {
+                        Button("断开连接") { session.stop() }.disabled(session.stopping)
+                    }
+                }
             }
         }
         .onChange(of: session.running) { _, running in

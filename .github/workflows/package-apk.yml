@@ -1,0 +1,82 @@
+name: package-apk
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        required: true
+      ANDROID_KEYSTORE_PASSWORD:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  package-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      EVERYWHERE_ANDROID_KEY_ALIAS: ${{ vars.ANDROID_KEY_ALIAS || 'everywhere' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        id: python
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android release signing files
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${KEYSTORE_BASE64:?Missing ANDROID_KEYSTORE_BASE64}"
+          : "${KEYSTORE_PASSWORD:?Missing ANDROID_KEYSTORE_PASSWORD}"
+          umask 077
+          signing=$(mktemp -d "$RUNNER_TEMP/apk-signing.XXXXXXXX")
+          echo "APK_SIGNING_DIR=$signing" >> "$GITHUB_ENV"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$signing/release.p12"
+          printf '%s' "$KEYSTORE_PASSWORD" > "$signing/password"
+          keytool -list -keystore "$signing/release.p12" -storepass:file "$signing/password" -alias "$EVERYWHERE_ANDROID_KEY_ALIAS" > /dev/null
+
+      - name: Prepare build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends autoconf automake autopoint gettext libtool libltdl-dev pkg-config cmake ninja-build zip unzip libffi-dev libssl-dev zlib1g-dev libncurses-dev libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0 patchelf
+          rustup target add aarch64-linux-android
+
+      - uses: ./.github/actions/prepare-mfi
+      - name: Verify bundled accessory identity
+        run: |
+          python -m pip install 'cryptography>=43'
+          python qt/worker.py --verify-bundle
+
+      - name: Build and verify signed arm64 APK
+        env:
+          ANDROID_HOST_PYTHON: ${{ steps.python.outputs.python-path }}
+        run: |
+          export EVERYWHERE_ANDROID_KEYSTORE="$APK_SIGNING_DIR/release.p12"
+          export EVERYWHERE_ANDROID_PASSWORD_FILE="$APK_SIGNING_DIR/password"
+          export ANDROID_NDK_ROOT="$ANDROID_SDK_ROOT/ndk/26.1.10909125"
+          ./setup-android.sh --release
+
+      - name: Remove signing files
+        if: always()
+        run: |
+          if [[ -n "${APK_SIGNING_DIR:-}" ]]; then
+            rm -f -- "$APK_SIGNING_DIR/release.p12" "$APK_SIGNING_DIR/password"
+            rmdir -- "$APK_SIGNING_DIR"
+          fi
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: package-apk
+          path: Build/Android/Everywhere-*-arm64-release.apk
+          if-no-files-found: error
+          compression-level: 0

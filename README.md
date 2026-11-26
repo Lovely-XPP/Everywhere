@@ -1,9 +1,9 @@
 <h1 align="center">
   <img src="swift/Host/MacApp/VirtualLocation.png" width="112" height="112" alt="Everywhere 应用图标"><br>
-  Everywhere
+  Everywhere 0.2.0
 </h1>
 
-<p align="center">在 Mac 或 Windows 地图上选点，模拟 iPhone 和 iPad 的位置。</p>
+<p align="center">在 macOS、Windows 或 Linux 桌面地图上选点，模拟 iPhone 和 iPad 的位置。</p>
 
 <p align="center">
   <strong>简体中文</strong> · <a href="README.en.md">English</a><br>
@@ -17,7 +17,7 @@
 ## 主要功能
 
 - **地图选点**。搜索地名、点按地图、输入经纬度，或从收藏中打开地点。发送到设备的坐标统一使用 WGS 84。
-- **USB 与 Wi-Fi 模拟定位**。在桌面控制台为已配对的设备设点、换点或清除模拟位置。Mac 和 Windows 共用软件定位后端。
+- **USB 与 Wi-Fi 模拟定位**。在桌面控制台为已配对的设备设点、换点或清除模拟位置。三个桌面平台共用软件定位后端。
 - **手机遥控**。首次通过 USB 将手机与主机绑定，之后可在手机上选点，由在线主机执行。每台移动设备只能操作自己的位置。
 - **定位诊断**。在 iPhone 或 iPad 上查看 Core Location 返回的坐标、采样时间、水平精度和来源标记，核对设点与恢复结果。
 - **蓝牙模式**。实验性 iAP2 配件模式通过经典蓝牙发送位置。BLE 直连模式用于更新 Everywhere 手机应用内的地图标记。
@@ -26,12 +26,24 @@
 
 | 平台 | 从源码构建 | 启动控制台 |
 | --- | --- | --- |
-| macOS | 在项目根目录运行 `./package.sh`。[Apple 构建要求](#导出-ipa-和-mac-app) | 运行 `open Build/Everywhere/Everywhere.app` |
-| Windows x64 | 在项目根目录的 PowerShell 运行 `.\package-windows.ps1`。[Windows 构建要求](windows/README.md) | 解压 `Build/Exports/` 中生成的 ZIP，打开 `Everywhere.exe` |
+| macOS（Swift） | 在项目根目录运行 `./package.sh`。[Apple 构建要求](#导出-ipa-和-mac-app) | 运行 `open Build/Everywhere/Everywhere.app` |
+| macOS（Python/Qt） | `./package-python-macos.sh` | 解压 ZIP 并打开 `EverywhereQt.app` |
+| Linux 桌面（Python/Qt） | `./package-python-linux.sh` | 解压 tar.gz 并运行 `./EverywhereQt/EverywhereQt` |
+| Windows x64 | 在项目根目录的 PowerShell 运行 `.\package-windows.ps1`。[Windows 构建要求](qt/README.md) | 解压 `Build/Exports/` 中生成的 ZIP，打开 `Everywhere.exe` |
 
 1. **连接设备**。选择「软件模拟模式」，解锁 iPhone 或 iPad，用 USB 数据线连接电脑，在设备上确认信任，并按提示开启开发者模式。在控制台选中目标设备。
 2. **发送位置**。在地图上选点，点击「发送地图选点」，阅读操作说明并点击「我已知晓」。在目标设备的「诊断」中查看新的定位样本。
 3. **恢复定位**。保持设备连接，点击「恢复真实定位」并确认。收到清除回执后，在目标设备查看下一条定位样本，核对是否回到实际位置。
+
+### GitHub Actions 安装包
+
+在仓库的 **Actions** 页面打开一次成功运行，在 **Artifacts** 下载对应架构的安装包。Swift 工作流生成 `package-mac-x64` 和 `package-mac-arm64`（ZIP），Qt 工作流生成 `package-linux-x64`（tar.gz）和 `package-windows-x64`（ZIP）。Android 工作流 `package-apk` 生成 Qt 6.8.3 的 arm64 签名 APK。
+
+在 **Actions → Release → Run workflow** 选择要发布的分支或标签。工作流构建该提交的五个安装包，从 Qt 代码读取版本并核对 Swift 版本，提取根目录 `CHANGELOG` 中同一版本的更新记录，全部成功后发布 `v<版本号>` 和五个附件。单独测试打包可手动运行 **Package Swift**、**Package Qt** 或 **package-apk**。推送和拉取请求均不会触发打包或发布。
+
+APK 构建使用仓库 Actions secrets `ANDROID_KEYSTORE_BASE64`（既有 Android 发布密钥库的 Base64 编码）和 `ANDROID_KEYSTORE_PASSWORD`（密钥库与私钥使用相同密码）。别名默认 `everywhere`，可通过仓库变量 `ANDROID_KEY_ALIAS` 指定。请使用与既有安装包相同的发布密钥，以便用户覆盖升级。
+
+五个 CI 任务均从 [v0.1.0 的 asset.zip](https://github.com/Lovely-XPP/Everywhere/releases/download/v0.1.0/asset.zip) 提取 `certificate.p7b` 和 `identity.pk8`，校验证书与私钥匹配后随安装包分发。下载者可以从成品中提取这套配件身份。本地打包默认仍使用 `asset/mfi/`。
 
 ## 检查本机定位来源
 
@@ -47,7 +59,7 @@
 
 ## Mac 模式与地图选点
 
-启动时选择「蓝牙配件模式」或「软件模拟模式」。软件模拟默认自动列出 USB 和 Wi-Fi 设备，直接点选手机。发布包内置 Python 运行时及开发定位服务，目标 Mac 可在未安装 Xcode 的情况下设点、换点和清除。会话结束后可在右侧返回模式选择。使用大陆偏移底图时，选择 GCJ-02，地图点击将反算到 WGS 84；原生 WGS 84 底图选择 WGS 84。手工输入、地点簿和发往手机的坐标均为 WGS 84。
+启动时选择「蓝牙配件模式」或「软件模拟模式」。软件模拟默认自动列出 USB 和 Wi-Fi 设备，直接点选手机。发布包内置 Python 运行时及开发定位服务，目标 Mac 可在未安装 Xcode 的情况下设点、换点和清除。会话结束后可在右侧返回模式选择。Swift 端使用大陆偏移底图时，选择 GCJ-02，地图点击将反算到 WGS 84；原生 WGS 84 底图选择 WGS 84。手工输入、地点簿和发往手机的坐标均为 WGS 84。
 
 **发送选点**。Mac、iPhone 和 iPad 每次发送或更换选点时都会显示定位服务操作说明。点击「我已知晓」才会下发本次命令，点击「取消」可返回地图。
 
@@ -59,7 +71,7 @@ Mac 版内置蓝牙客户端、RFCOMM 桥和 MFi v3 认证程序。配件证书�
 
 在 iPhone 的 Everywhere 打开「连接设置 → 蓝牙 → 手机扫描 Mac」，选择执行 iAP2 的那台 Mac，即可通过加密的只读蓝牙服务看到 Mac 所选设备、握手、认证、失败与结束状态。这条状态通道不需要接收码；系统是否采用坐标仍在「本机定位来源」中观察。
 
-在「已有iPhone连接」下拉框选择已配对的手机即可连接并验证 iAP2。连接结束或失败后，再次选择同一台手机即可重试。认证与识别完成后，控制台保持同一条连接，点击「发送地图选点」并确认才提交坐标。在 Mac 地图选点，点击「发送地图选点」，在 iPhone 上打开地图并请求当前位置。控制台依照客户端事件显示认证、位置请求和链路回执。发送会话在识别和认证完成后持续保持连接；手机暂停订阅时暂停发包，恢复订阅后继续。短暂断线时，发送会话会在 2 秒和 5 秒后最多重连两次。重新认证后点击「确认选点并继续发送」，待手机重新订阅后恢复发送。可随时点「停止会话」；更换地点后再次点击「发送地图选点」，在同一连接等待新坐标的回执。手机端的系统采纳与恢复均需用独立的 Core Location 样本核对。内置程序、对应源码与许可证随 App 分发。上游版本和打包说明见 swift/Host/IAP2Client。构建机用 EVERYWHERE_IAP2_PYTHON 指定装有 PyInstaller 6 的 Python 3.11+；使用安装包的 Mac 无需安装 Python。
+在「已有iPhone连接」下拉框选择已配对的手机即可连接并验证 iAP2。连接结束或失败后，再次选择同一台手机即可重试。认证与识别完成后，控制台保持同一条连接，点击「发送地图选点」并确认才提交坐标。在 Mac 地图选点，点击「发送地图选点」，在 iPhone 上打开地图并请求当前位置。控制台依照客户端事件显示认证、位置请求和链路回执。发送会话在识别和认证完成后持续保持连接；手机暂停订阅时暂停发包，恢复订阅后继续。短暂断线时，发送会话会在 2 秒和 5 秒后最多重连两次。重新认证后点击「确认选点并继续发送」，待手机重新订阅后恢复发送。结束配件定位时点击「恢复真实定位」并确认；更换地点后再次点击「发送地图选点」，在同一连接等待新坐标的回执。手机端的系统采纳与恢复均需用独立的 Core Location 样本核对。内置程序、对应源码与许可证随 App 分发。上游版本和打包说明见 swift/Host/IAP2Client。构建机用 EVERYWHERE_IAP2_PYTHON 指定装有 PyInstaller 6 的 Python 3.11+；使用安装包的 Mac 无需安装 Python。
 
 ## 蓝牙直连
 
@@ -73,7 +85,9 @@ Mac 版内置蓝牙客户端、RFCOMM 桥和 MFi v3 认证程序。配件证书�
 
 手机也可主动发起蓝牙连接。在 Mac 的「蓝牙模式 → 设备」选择「手机扫描 Mac」并开启广播，在手机点「手机扫描 Mac」并选择对应主机。系统提示时确认蓝牙配对，再在 Mac 输入手机的六位接收码。坐标更新和清除均以手机应用回执为准。
 
-如果大陆偏移底图上的地标与已知 WGS 84 坐标错位，可在地图图层菜单将「底图坐标系」切换为 GCJ-02 并重新选点。默认使用 WGS 84。点击和搜索结果按所选底图坐标系转换，手输、收藏及发送给设备的坐标统一使用 WGS 84。旧收藏缺少坐标来源，原先在错误模式下存下的点需要重新选取。
+Qt 桌面端保留 WGS 84 和 GCJ-02 两项。OpenStreetMap 对两项都按 WGS 84 对齐，同一像素选点得到相同经纬度。自定义 XYZ 图层也应与 WGS 84 对齐。
+
+在 Swift 端，如果大陆偏移底图上的地标与已知 WGS 84 坐标错位，可在地图图层菜单将「底图坐标系」切换为 GCJ-02 并重新选点。默认使用 WGS 84。点击和搜索结果按所选底图坐标系转换，手输、收藏及发送给设备的坐标统一使用 WGS 84。旧收藏缺少坐标来源，原先在错误模式下存下的点需要重新选取。
 
 ## 项目目录
 
@@ -84,7 +98,9 @@ Mac 版内置蓝牙客户端、RFCOMM 桥和 MFi v3 认证程序。配件证书�
 | `swift/Sources/MacHost/` | Mac 启动入口；`Console/` 管理控制台，`Devices/` 负责设备发现，`Remote/` 处理遥控连接，`Bluetooth/` 包含 BLE 和 iAP2。 |
 | `swift/Host/` | iAP2 客户端、蓝牙桥、软件模拟后端、App 打包和 iOS 签名工具。 |
 | `swift/Apps/`、`swift/Tests/` | iOS 应用与独立诊断工程，以及各模块的测试。 |
-| `windows/` | Windows Qt 源码、蓝牙原生桥与测试。见 [Windows 构建说明](windows/README.md)。 |
+| `qt/` | 三平台 Python/Qt 源码、蓝牙桥与测试。见 [Python/Qt 构建说明](qt/README.md)。 |
+
+Android 手机作为 iAP2 执行端的实验入口与 arm64 APK 构建方法见 [Android 构建与使用](qt/README.md#android-配件执行端实验)。
 
 ## 导出 IPA 和 Mac App
 
@@ -117,7 +133,7 @@ MAC_SIGN_IDENTITY="你的代码签名证书名称" ./package.sh "$HOME/Desktop/E
 | [swift/Package.swift](swift/Package.swift) | 在 Xcode 中打开，选择 MacHost 和 My Mac 运行。命令行也可使用下方 SwiftPM 入口。Mac 最低部署版本为 14。 |
 | [Everywhere 移动端](swift/Apps/Mobile/Mobile.xcodeproj) | iPhone 和 iPad 共用的主应用，包含本机定位、连接与诊断。 |
 | [现代系统辅助进程](swift/Host/ModernBackend/README.md) | 创建项目外的 Python 环境、安装指定版本的依赖、准备开发设备及使用独立 JSONL 调试入口。 |
-| [Windows Qt 控制台](windows/README.md) | Windows 设备连接、依赖、构建与测试说明。 |
+| [跨平台 Python/Qt 控制台](qt/README.md) | 桌面设备连接、各平台依赖、构建与测试说明。 |
 
 命令从项目根目录执行。将缓存放在临时目录。MacHost 的启动本身不会发出设点请求。
 

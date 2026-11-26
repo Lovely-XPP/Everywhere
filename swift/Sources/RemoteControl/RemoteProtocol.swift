@@ -56,7 +56,7 @@ public enum LocationRecoveryScope: String, Codable, Sendable {
 
     public var receipt: String {
         switch self {
-        case .device: return "已收到停止模拟的回执。请在目标设备的地图点“我的位置”，或在 Everywhere 的“诊断”中 核对新样本。如果仍停在旧点，可手动重启目标设备后再检查。"
+        case .device: return "已收到停止模拟的回执。请在目标设备的地图点“我的位置”，或在 Everywhere 的“诊断”中 核对新样本。如果仍停在旧点，请关闭再打开定位服务，必要时重启目标设备再检查。"
         case .simulator: return "已清除模拟器位置源。模拟器没有真实 GPS 位置。"
         case .bluetoothApp: return "手机应用已确认移除蓝牙位置标记。"
         }

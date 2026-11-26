@@ -32,7 +32,14 @@ struct MacConsoleView: View {
                                                           span: .init(latitudeDelta: 0.5, longitudeDelta: 0.5))
     /// 窗口持有遥控主机，切换设备面板时继续维护 Wi-Fi 和 USB 连接。
     @StateObject private var remoteHost = RemoteHost()
-    @State private var restoreTarget: RemoteTarget?
+    /// 恢复确认绑定弹窗打开时的目标和会话，取消不会执行恢复。
+    private struct RestoreRequest: Identifiable {
+        let id = UUID()
+        let title: String
+        let message: String
+        let perform: () -> Void
+    }
+    @State private var restoreRequest: RestoreRequest?
     @State private var choosingMode = true
     @State private var tappedCoordinate: CLLocationCoordinate2D?
     @State private var section: InspectorSection = .place
@@ -158,7 +165,7 @@ struct MacConsoleView: View {
                                     .font(.caption).monospacedDigit()
                             }
                             HStack {
-                                LocationSendButton(recoveryAction: "停止会话") {
+                                LocationSendButton(recoveryAction: "恢复真实定位") {
                                     guard let point = model.draftPoint else { return nil }
                                     return iap2.preparePointSend(point, jitter: positionJitter)
                                 } label: {
@@ -166,9 +173,16 @@ struct MacConsoleView: View {
                                 }
                                 .buttonStyle(MapActionStyle())
                                 .disabled(model.draftPoint == nil || !iap2.readyToSend)
-                                Button(iap2.requestedPoint == nil ? "断开连接" : "停止会话") { iap2.stop() }
+                                Button("恢复真实定位") {
+                                    if let perform = iap2.prepareRestore() {
+                                        let name = iap2.devices[iap2.address] ?? iap2.address
+                                        restoreRequest = RestoreRequest(title: "恢复真实定位",
+                                            message: "目标设备：\(name)\n将结束 iAP2 配件会话。请在 iPhone 地图点“我的位置”核对新样本；若仍停留在旧点，请关闭再打开定位服务。",
+                                            perform: perform)
+                                    }
+                                }
                                     .buttonStyle(MapActionStyle(prominent: false))
-                                    .disabled(!iap2.running || iap2.stopping)
+                                    .disabled(!iap2.canRestore)
                             }
                         }
                         .padding(14)
@@ -192,12 +206,10 @@ struct MacConsoleView: View {
         .sheet(item: $browserTab) { tab in
             PlaceBrowser(book: book, tab: tab, region: visibleRegion, select: selectPlace)
         }
-        .alert(item: $restoreTarget) { target in
-            let scope = target.recoveryScope ?? .device
-            return Alert(title: Text(scope.button + "？"),
-                         message: Text("目标设备：" + (model.devices[target.id]?.name ?? target.id) + "\n" + scope.instructions),
-                         primaryButton: .default(Text(scope.button)) { Task { await model.restore(target) } },
-                         secondaryButton: .cancel(Text("取消")))
+        .alert(item: $restoreRequest) { request in
+            Alert(title: Text(request.title + "？"), message: Text(request.message),
+                  primaryButton: .default(Text(request.title), action: request.perform),
+                  secondaryButton: .cancel(Text("取消")))
         }
         .frame(minWidth: 800, minHeight: 560)
         .onChange(of: model.backendMode, initial: true) { _, mode in iap2.shareStatus(mode == .iap2) }
@@ -572,7 +584,12 @@ struct MacConsoleView: View {
                 .buttonStyle(MapActionStyle())
                 .disabled(!model.canApply)
                 Button(model.backendMode.recoveryScope.button) {
-                    restoreTarget = model.remoteTargets.first { $0.id == model.selectedDeviceID }
+                    guard let target = model.remoteTargets.first(where: { $0.id == model.selectedDeviceID }) else { return }
+                    let scope = target.recoveryScope ?? .device
+                    let name = model.devices[target.id]?.name ?? target.id
+                    restoreRequest = RestoreRequest(title: scope.button, message: "目标设备：\(name)\n" + scope.instructions) {
+                        Task { await model.restore(target) }
+                    }
                 }
                 .buttonStyle(MapActionStyle(prominent: false))
                 .disabled(!model.canClear)

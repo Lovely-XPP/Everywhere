@@ -106,6 +106,17 @@ static IOBluetoothDevice *selectedTarget(NSString *address, Class deviceClass) {
     return device;
 }
 
+// The inquiry runs only after the user explicitly asks for nearby classic devices.
+@interface Inquiry : NSObject <IOBluetoothDeviceInquiryDelegate>
+@property BOOL done;
+@property IOReturn status;
+@end
+@implementation Inquiry
+- (void)deviceInquiryComplete:(IOBluetoothDeviceInquiry *)sender error:(IOReturn)error aborted:(BOOL)aborted {
+    self.status = error; self.done = YES;
+}
+@end
+
 int main(int argc, const char **argv) {
     @autoreleasepool {
         if (argc == 2 && strcmp(argv[1], "--controller") == 0) {
@@ -114,9 +125,24 @@ int main(int argc, const char **argv) {
             puts(address.UTF8String);
             return 0;
         }
-        if (argc == 2 && strcmp(argv[1], "--list") == 0) {
+        if (argc == 2 && (!strcmp(argv[1], "--list") || !strcmp(argv[1], "--discover"))) {
+            NSArray *devices;
+            if (!strcmp(argv[1], "--discover")) {
+                Inquiry *delegate = [Inquiry new];
+                IOBluetoothDeviceInquiry *inquiry = [IOBluetoothDeviceInquiry inquiryWithDelegate:delegate];
+                inquiry.inquiryLength = 8;
+                if (!inquiry || [inquiry start] != kIOReturnSuccess) return 3;
+                NSDate *limit = [NSDate dateWithTimeIntervalSinceNow:18];
+                while (!delegate.done && limit.timeIntervalSinceNow > 0)
+                    [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+                if (!delegate.done) { [inquiry stop]; return 3; }
+                if (delegate.status != kIOReturnSuccess) return 3;
+                devices = inquiry.foundDevices;
+            } else {
+                devices = [IOBluetoothDevice pairedDevices];
+            }
             NSMutableArray *result = [NSMutableArray array];
-            for (IOBluetoothDevice *device in [IOBluetoothDevice pairedDevices]) {
+            for (IOBluetoothDevice *device in devices) {
                 [result addObject:@{@"name": device.name ?: @"", @"address": device.addressString ?: @""}];
             }
             NSData *json = [NSJSONSerialization dataWithJSONObject:result options:0 error:nil];

@@ -42,3 +42,6 @@ certificate.p7b
 *.pfx
 *.mobileprovision
 p12-password
+
+# Android 发布签名，仅本机保存
+/asset/android-signing/

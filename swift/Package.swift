@@ -18,6 +18,7 @@ let package = Package(
             sources: ["ModernHelperResource.swift"],
             resources: [.copy("modern_backend.py")]
         ),
+        .executableTarget(name: "QtBluetoothBridge", dependencies: ["DeviceBackend", "ScenarioKit"]),
         .executableTarget(
             name: "MacHost",
             dependencies: ["ScenarioKit", "HostSession", "DeviceBackend", "ModernHelper", "RemoteControl", "PlaceKit"]

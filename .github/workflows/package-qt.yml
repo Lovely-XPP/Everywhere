@@ -1,0 +1,70 @@
+name: Package Qt
+
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Platform to package
+        type: choice
+        default: all
+        options:
+          - all
+          - linux-x64
+          - windows-x64
+
+permissions:
+  contents: read
+
+env:
+  EVERYWHERE_BUNDLE_MFI_IDENTITY: '1'
+  QT_QPA_PLATFORM: offscreen
+
+jobs:
+  package-linux-x64:
+    if: inputs.target != 'windows-x64'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Install Qt and device runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends binutils dbus-daemon libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0 libusb-1.0-0
+      - uses: ./.github/actions/prepare-mfi
+      - name: Package Qt for Linux x64
+        run: |
+          test "$(uname -m)" = x86_64
+          ./package-python-linux.sh --output-dir Build/Exports
+      - uses: actions/upload-artifact@v6
+        with:
+          name: package-linux-x64
+          path: Build/Exports/EverywhereQt-Linux-x86_64-*.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+
+  package-windows-x64:
+    if: inputs.target != 'linux-x64'
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        id: python
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - uses: ./.github/actions/prepare-mfi
+      - name: Package Qt for Windows x64
+        shell: pwsh
+        env:
+          EVERYWHERE_QT_PYTHON: ${{ steps.python.outputs.python-path }}
+        run: .\package-windows.ps1
+      - uses: actions/upload-artifact@v6
+        with:
+          name: package-windows-x64
+          path: Build/Exports/Everywhere-Windows-x64-*.zip
+          if-no-files-found: error
+          compression-level: 0

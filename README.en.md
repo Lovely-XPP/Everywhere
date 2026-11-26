@@ -1,9 +1,9 @@
 <h1 align="center">
   <img src="swift/Host/MacApp/VirtualLocation.png" width="112" height="112" alt="Everywhere app icon"><br>
-  Everywhere
+  Everywhere 0.2.0
 </h1>
 
-<p align="center">Pick a point on your Mac or Windows PC to simulate an iPhone or iPad’s location.</p>
+<p align="center">Pick a point on your macOS, Windows, or Linux desktop to simulate an iPhone or iPad’s location.</p>
 
 <p align="center">
   <a href="README.md">简体中文</a> · <strong>English</strong><br>
@@ -17,7 +17,7 @@
 ## Features
 
 - **Map selection.** Search for a place, click the map, enter coordinates, or return to a favorite. The console sends coordinates in WGS 84.
-- **USB and Wi-Fi simulation.** Set, change, or clear a paired device’s simulated location from the desktop. The Mac and Windows consoles share the same software location backend.
+- **USB and Wi-Fi simulation.** Set, change, or clear a paired device’s simulated location from the desktop. All three desktop platforms share the same software location backend.
 - **Mobile remote control.** Bind the phone to its host over USB, then pick a point on the phone and let the online host apply it. Each mobile device controls its own location.
 - **Location diagnostics.** Check the coordinates, timestamp, horizontal accuracy, and source flags reported by Core Location on the iPhone or iPad after setting or clearing a point.
 - **Bluetooth modes.** The experimental iAP2 accessory mode sends location updates over Classic Bluetooth. A separate BLE connection updates the map marker inside the Everywhere mobile app.
@@ -26,12 +26,24 @@
 
 | Platform | Build from the repository root | Open the console |
 | --- | --- | --- |
-| macOS | Run `./package.sh`. [Apple build requirements](#export-the-ipa-and-mac-app) | Run `open Build/Everywhere/Everywhere.app`. |
-| Windows x64 | Run `.\package-windows.ps1` in PowerShell. [Windows build requirements (Chinese)](windows/README.md) | Extract the ZIP in `Build/Exports/` and open `Everywhere.exe`. |
+| macOS (Swift) | Run `./package.sh`. [Apple build requirements](#export-the-ipa-and-mac-app) | Run `open Build/Everywhere/Everywhere.app`. |
+| macOS (Python/Qt) | `./package-python-macos.sh` | Extract the ZIP and open `EverywhereQt.app`. |
+| Linux desktop (Python/Qt) | `./package-python-linux.sh` | Extract the tar.gz and run `./EverywhereQt/EverywhereQt`. |
+| Windows x64 | Run `.\package-windows.ps1` in PowerShell. [Windows build requirements (Chinese)](qt/README.md) | Extract the ZIP in `Build/Exports/` and open `Everywhere.exe`. |
 
 1. **Connect your device.** Choose **Software simulation**, unlock the iPhone or iPad, and connect it to the computer with a USB data cable. Confirm trust, enable Developer Mode if prompted, and select the device in the console.
 2. **Send a location.** Pick a point on the map, choose **Send map point**, read the instructions, and select **I understand**. Open Diagnostics on the target device to check a fresh location sample.
 3. **Restore the location.** Keep the device connected, select **Restore real location**, and confirm. After the console acknowledges the clear request, check the next device sample to see whether it shows the actual location.
+
+### GitHub Actions packages
+
+Open a successful run under **Actions** and download the package for your architecture from **Artifacts**. The Swift workflow produces `package-mac-x64` and `package-mac-arm64` (ZIP). The Qt workflow produces `package-linux-x64` (tar.gz) and `package-windows-x64` (ZIP). The `package-apk` workflow produces a signed Qt 6.8.3 arm64 Android APK.
+
+Choose the branch or tag under **Actions → Release → Run workflow**. The workflow builds all five packages for that commit, reads the Qt version, checks it against the Swift app, and extracts the matching section from the root `CHANGELOG`. Once all packages succeed, it publishes `v<version>` with five downloadable assets. To build without publishing, manually run **Package Swift**, **Package Qt** or **package-apk**. Pushes and pull requests do not start builds or releases.
+
+Set the repository Actions secrets `ANDROID_KEYSTORE_BASE64` (Base64-encoded Android release keystore) and `ANDROID_KEYSTORE_PASSWORD` (shared store and key password). The default key alias is `everywhere`. Set the repository variable `ANDROID_KEY_ALIAS` to select another alias. Reuse the existing release key so users can update an installed APK.
+
+All five jobs extract `certificate.p7b` and `identity.pk8` from the [v0.1.0 release asset](https://github.com/Lovely-XPP/Everywhere/releases/download/v0.1.0/asset.zip), verify that the pair matches, and bundle both files. Anyone with the package can extract the accessory identity. Local builds use `asset/mfi/` by default.
 
 ## Check the device’s location source
 
@@ -49,7 +61,7 @@ In Bluetooth receiver mode, **Clear Bluetooth location** removes the marker from
 
 At startup, choose **Bluetooth accessory** or **Software simulation**. Software simulation lists devices found over USB and Wi-Fi. Select the target from that list. The packaged Mac app includes its own Python runtime and developer location service, so the bundled backend can set, change, and clear a location without Xcode on the target Mac. After ending the session, use the control on the right to return to mode selection.
 
-Choose **GCJ-02** for a mainland China basemap that uses that coordinate system. Everywhere converts map selections back to WGS 84. Choose **WGS 84** for a native WGS 84 basemap. Manual entries, saved places, and coordinates sent to the device use WGS 84.
+In the Swift apps, choose **GCJ-02** for a mainland China basemap that uses that coordinate system. Everywhere converts map selections back to WGS 84. Choose **WGS 84** for a native WGS 84 basemap. Manual entries, saved places, and coordinates sent to the device use WGS 84.
 
 **Send a point.** On Mac, iPhone, and iPad, sending a new or replacement point opens the Location Services instructions. Tap **I understand** (我已知晓) to send the command or **Cancel** to return to the map.
 
@@ -63,7 +75,7 @@ The Mac app includes a Bluetooth client, an RFCOMM bridge, and an MFi v3 authent
 2. For a new phone, click **Connect new iPhone** and select it in the device panel. The Mac opens a Classic Bluetooth connection, discovers the iAP2 service, and requests authentication. Confirm any system pairing prompt. For a paired phone, select it under **Existing iPhone connections** (已有iPhone连接). Select it again to retry a failed or closed connection.
 3. When the console reports that accessory authentication passed, the iPhone has accepted the identity for that session. The Mac keeps the connection open after authentication and identification. Select a point and confirm **Send map point** (发送地图选点). On the iPhone, open Maps and request the current location. The console reports authentication events, location requests, and link acknowledgments. Check an independent Core Location sample on the phone to see whether the system adopted the point.
 
-Transmission pauses while the phone suspends its subscription and resumes when it subscribes again. After a brief disconnect the client makes up to two reconnect attempts, after 2 and 5 seconds. After reauthentication, confirm the selected point again. Sending resumes when the phone resubscribes. To change points, send the new selection on the same connection and wait for its acknowledgment. **Stop session** ends the session. Check a fresh Core Location sample to confirm recovery.
+Transmission pauses while the phone suspends its subscription and resumes when it subscribes again. After a brief disconnect the client makes up to two reconnect attempts, after 2 and 5 seconds. After reauthentication, confirm the selected point again. Sending resumes when the phone resubscribes. To change points, send the new selection on the same connection and wait for its acknowledgment. **Restore real location** ends the selected accessory session after confirmation. Check a fresh Core Location sample to confirm recovery.
 
 To monitor the session from the phone, open **Connection settings → Bluetooth → Phone scans Mac** and select the Mac running iAP2. An encrypted, read-only Bluetooth service reports the target, handshake, authentication, failures, and session end. This status channel requires no receiver code.
 
@@ -84,7 +96,9 @@ The code applies to one receiving session. The first Mac to authenticate control
 
 To check BLE delivery, send A and then B, confirm each marker on the phone, and clear it. For comparison with system location, bring the phone app to the foreground and start monitoring. Diagnostics shows the distance from the fresh system sample to the Bluetooth marker, along with horizontal accuracy. The Mac packaging script adds the Bluetooth permission description to the app.
 
-If map landmarks appear offset from known WGS 84 coordinates, select GCJ-02 in the layer menu and pick the point again. WGS 84 is the default. Map taps and search results use the selected basemap conversion. Older favorites have no coordinate-source metadata, so reselect any saved with the wrong setting.
+The Qt desktop app offers both WGS 84 and GCJ-02. Both choices use the same WGS 84 coordinates on OpenStreetMap, so selecting the same pixel yields the same location. Custom XYZ layers should also align with WGS 84.
+
+In the Swift apps, if map landmarks appear offset from known WGS 84 coordinates, select GCJ-02 in the layer menu and pick the point again. WGS 84 is the default. Map taps and search results use the selected basemap conversion. Older favorites have no coordinate-source metadata, so reselect any saved with the wrong setting.
 
 ## Project layout
 
@@ -95,7 +109,7 @@ If map landmarks appear offset from known WGS 84 coordinates, select GCJ-02 in t
 | `swift/Sources/MacHost/` | Mac entry point. `Console/` manages the UI, `Devices/` discovers devices, `Remote/` handles remote connections, and `Bluetooth/` contains BLE and iAP2 support. |
 | `swift/Host/` | iAP2 client, Bluetooth bridge, software simulation backend, packaging and iOS signing tools. |
 | `swift/Apps/`, `swift/Tests/` | iOS apps, standalone diagnostics project, and module tests. |
-| `windows/` | Qt console, native Bluetooth bridges, and tests. See the [Windows build guide (Chinese)](windows/README.md). |
+| `qt/` | Qt console, native Bluetooth bridges, and tests. See the [Python/Qt build guide (Chinese)](qt/README.md). |
 
 ## Export the IPA and Mac app
 
@@ -128,7 +142,7 @@ If a build already running in a sandbox reports `sandbox_apply: Operation not pe
 | [Swift package](swift/Package.swift) | Open in Xcode, choose `MacHost` and **My Mac**, or use SwiftPM below. The minimum macOS deployment target is 14. |
 | [Everywhere mobile app](swift/Apps/Mobile/Mobile.xcodeproj) | The iPhone and iPad app for local location monitoring, host connections, and diagnostics. Installing on a physical device requires matching signing and provisioning. |
 | [Modern backend](swift/Host/ModernBackend/README.md) | Set up an external Python environment, install pinned dependencies, prepare a developer device, or debug through the standalone JSONL interface. |
-| [Windows Qt console](windows/README.md) | Windows connections, dependencies, builds, and tests (in Chinese). |
+| [Cross-platform Python/Qt console](qt/README.md) | Desktop connections, platform-specific dependencies, builds, and tests (in Chinese). |
 
 Run these commands from the repository root to keep build caches in a temporary directory. Starting `MacHost` leaves the device location untouched until you send a point.
 

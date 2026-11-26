@@ -140,7 +140,7 @@ final class IAP2LocationSessionTests: XCTestCase {
         echo '{"event":"location_requested"}'
         IFS= read -r line || exit 1
         echo '{"event":"location_link_acknowledged","count":1}'
-        exec /bin/sleep 10
+        while IFS= read -r line; do :; done
         """
         for (file, body) in [(client, sender), (helper, "#!/bin/sh\nexit 0"), (bridge, "#!/bin/sh\nexit 0")] {
             try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -162,10 +162,15 @@ final class IAP2LocationSessionTests: XCTestCase {
         XCTAssertTrue(report.authenticated)
         XCTAssertEqual(report.target, "测试设备")
         XCTAssertTrue(session.status.contains("定位包已获链路确认"), session.status)
-        session.stop()
+        let restore = try XCTUnwrap(session.prepareRestore())
+        restore()
         for _ in 0..<200 where session.running { try await Task.sleep(for: .milliseconds(30)) }
         XCTAssertFalse(session.phoneReport.authenticated)
         XCTAssertFalse(session.running)
-        XCTAssertTrue(session.status.contains("会话已结束"), session.status)
+        XCTAssertTrue(session.status.contains("配件位置输出已结束"), session.status)
+        XCTAssertNil(session.requestedPoint)
+        XCTAssertFalse(session.canRestore)
+        restore()
+        XCTAssertFalse(session.running)
     }
 }

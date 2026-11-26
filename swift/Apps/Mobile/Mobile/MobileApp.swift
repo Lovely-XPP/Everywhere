@@ -212,9 +212,15 @@ private struct MobileView: View {
                     if model.connected {
                         actionButtons
                     } else {
-                        Button { pairing = true } label: {
-                            Label(model.transport == .bluetooth ? "蓝牙接收设置" : "连接 Mac", systemImage: "desktopcomputer")
-                        }.buttonStyle(MapActionStyle())
+                        HStack {
+                            Button { pairing = true } label: {
+                                Label(model.transport == .bluetooth ? "蓝牙接收设置" : "连接 Mac", systemImage: "desktopcomputer")
+                            }.buttonStyle(MapActionStyle())
+                            if model.transport == .bluetooth, !bluetooth.viewingIAP2, bluetooth.point != nil {
+                                Button("清除蓝牙位置") { bluetooth.clearLocalPoint() }
+                                    .buttonStyle(MapActionStyle(prominent: false))
+                            }
+                        }
                     }
                 }.padding(.horizontal, 14).padding(.vertical, 8)
             }.background(.regularMaterial)

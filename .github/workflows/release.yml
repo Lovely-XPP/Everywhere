@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+
+jobs:
+  swift:
+    uses: ./.github/workflows/package-swift.yml
+
+  qt:
+    uses: ./.github/workflows/package-qt.yml
+
+  apk:
+    uses: ./.github/workflows/package-apk.yml
+    secrets:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+
+  publish:
+    needs: [swift, qt, apk]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: package-*
+          path: packages
+          merge-multiple: false
+      - name: Publish release packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=$(mktemp -d)
+          tag=$(python3 .github/scripts/prepare-release.py packages "$output")
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            if [[ $(git rev-parse "refs/tags/$tag^{commit}") != "$GITHUB_SHA" ]]; then
+              echo "::error::Tag $tag already points to another commit."
+              exit 1
+            fi
+          fi
+
+          # 同一提交上传中断时可继续自己的草稿；已发布版本保持原样。
+          if state=$(gh release view "$tag" --json isDraft,targetCommitish); then
+            if ! jq -e --arg sha "$GITHUB_SHA" '.isDraft and .targetCommitish == $sha' <<< "$state" >/dev/null; then
+              echo "::error::Release $tag already exists and is published or targets another revision."
+              exit 1
+            fi
+          else
+            gh release create "$tag" --draft --target "$GITHUB_SHA" --title "Everywhere $tag" --notes-file "$output/notes.md"
+          fi
+          gh release upload "$tag" "$output"/Everywhere-* --clobber
+          gh release edit "$tag" --title "Everywhere $tag" --notes-file "$output/notes.md" --draft=false

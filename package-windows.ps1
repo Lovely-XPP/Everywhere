@@ -3,18 +3,23 @@ param([switch]$EmbedMfiKey = $true, [string]$OutputDirectory)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = $PSScriptRoot
-$win = Join-Path $root 'windows'
+$qt = Join-Path $root 'qt'
 $modern = Join-Path $root 'swift/Host/ModernBackend'
 $accessory = Join-Path $root 'swift/Host/IAP2Client'
 $mfi = Join-Path $root 'asset/mfi'
+$bundleIdentity = $env:EVERYWHERE_BUNDLE_MFI_IDENTITY -ne '0'
 function Run([string]$program, [string[]]$arguments) {
     & $program @arguments
     if ($LASTEXITCODE -ne 0) { throw "$program exited with $LASTEXITCODE" }
 }
-foreach ($file in @("$modern/portable_location.py","$modern/requirements.txt","$accessory/src/accessory_location/cli.py","$accessory/NOTICE","$mfi/certificate.p7b")) {
+$identityFiles = @()
+if ($bundleIdentity) {
+    $identityFiles += 'certificate.p7b'
+    if ($EmbedMfiKey) { $identityFiles += 'identity.pk8' }
+}
+foreach ($file in @("$modern/portable_location.py","$modern/requirements.txt","$accessory/src/accessory_location/cli.py","$accessory/NOTICE") + @($identityFiles | ForEach-Object { Join-Path $mfi $_ })) {
     if (!(Test-Path -LiteralPath $file -PathType Leaf)) { throw "Missing required project file: $file" }
 }
-if ($EmbedMfiKey -and !(Test-Path "$mfi/identity.pk8" -PathType Leaf)) {throw 'Missing asset/mfi/identity.pk8'}
 if (!$OutputDirectory) {$OutputDirectory = Join-Path $root 'Build/Exports'}
 $null = New-Item -ItemType Directory -Force -Path $OutputDirectory
 $temp = Join-Path ([IO.Path]::GetTempPath()) ('Everywhere-'+[guid]::NewGuid().ToString('N'))
@@ -29,29 +34,43 @@ try {
         Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
     }
     if ($env:VSCMD_ARG_TGT_ARCH -ne 'x64') {throw 'Select the x64 Native Tools command prompt.'}
-    Run 'py' @('-3.13','-c','import sys,ssl; assert sys.maxsize > 2**32 and ssl.HAS_PSK')
     $venv = Join-Path $root 'Build/Windows-Python'
-    if (!(Test-Path "$venv/Scripts/python.exe")) {Run 'py' @('-3.13','-m','venv',$venv)}
+    if (!(Test-Path "$venv/Scripts/python.exe")) {
+        if ($env:EVERYWHERE_QT_PYTHON) {
+            Run $env:EVERYWHERE_QT_PYTHON @('-m','venv',$venv)
+        } else {
+            Run 'py' @('-3.13','-m','venv',$venv)
+        }
+    }
     $py="$venv/Scripts/python.exe"
-    Run $py @('-m','pip','install','-r',"$modern/requirements.txt",'-r',"$win/requirements.txt")
+    Run $py @('-c','import sys,ssl; assert sys.version_info[:2] == (3,13) and sys.maxsize > 2**32 and ssl.HAS_PSK')
+    Run $py @('-m','pip','install','-r',"$modern/requirements.txt",'-r',"$qt/requirements.txt")
     Run $py @('-m','pip','check')
     $stage = Join-Path $temp 'dist'
     $common = @('-m','PyInstaller','--noconfirm','--clean','--noupx','--distpath',$stage,'--workpath',"$temp/work",'--specpath',$temp,'--paths',$modern,'--paths',"$accessory/src",'--exclude-module','pytest','--exclude-module','IPython')
     $deviceDependencies = @('--recursive-copy-metadata','pymobiledevice3','--collect-data','pymobiledevice3','--collect-data','developer_disk_image','--collect-submodules','pytcp')
-    Run $py ($common + $deviceDependencies + @('--name','Everywhere','--windowed','--onedir','--hidden-import','portable_location','--collect-submodules','bleak.backends.winrt','--copy-metadata','keyring','--hidden-import','keyring.backends.Windows',"$win/app.py"))
-    Run $py ($common + @('--name','EverywhereWorker','--console','--onefile',"$win/worker.py"))
+    $appVersion = (& $py "$qt/app_version.py").Trim()
+    if ($LASTEXITCODE -ne 0 -or $appVersion -notmatch '^\d+\.\d+\.\d+$') {throw 'Invalid Qt application version'}
+    $versionTuple = $appVersion.Replace('.', ',') + ',0'
+    $versionFile = "$temp/version.txt"
+    @"
+VSVersionInfo(ffi=FixedFileInfo(filevers=($versionTuple),prodvers=($versionTuple),mask=0x3f,flags=0,OS=0x40004,fileType=1,subtype=0,date=(0,0)),
+  kids=[StringFileInfo([StringTable('040904b0',[StringStruct('ProductName','Everywhere'),StringStruct('FileVersion','$appVersion'),StringStruct('ProductVersion','$appVersion')])]),
+        VarFileInfo([VarStruct('Translation',[1033,1200])])])
+"@ | Set-Content -LiteralPath $versionFile -Encoding ASCII
+    Run $py ($common + $deviceDependencies + @('--name','Everywhere','--version-file',$versionFile,'--windowed','--onedir','--hidden-import','portable_location','--collect-submodules','bleak.backends.winrt','--copy-metadata','keyring','--hidden-import','keyring.backends.Windows',"$qt/app.py"))
+    Run $py ($common + @('--name','EverywhereWorker','--console','--onefile',"$qt/worker.py"))
     $dest = "$stage/Everywhere"
     Copy-Item "$stage/EverywhereWorker.exe" $dest
-    Run 'cl.exe' @('/nologo','/std:c++17','/EHsc','/O2','/MT','/utf-8',"/Fo$temp/rfcomm.obj","/Fe$dest/rfcomm.exe","$win/native/rfcomm.cpp",'ws2_32.lib','Bthprops.lib')
-    Run 'cl.exe' @('/nologo','/std:c++20','/EHsc','/O2','/MT','/utf-8',"/Fo$temp/gatt.obj","/Fe$dest/EverywhereGatt.exe","$win/native/gatt.cpp",'windowsapp.lib')
+    Run 'cl.exe' @('/nologo','/std:c++17','/EHsc','/O2','/MT','/utf-8',"/Fo$temp/rfcomm.obj","/Fe$dest/rfcomm.exe","$qt/native/rfcomm.cpp",'ws2_32.lib','Bthprops.lib')
+    Run 'cl.exe' @('/nologo','/std:c++20','/EHsc','/O2','/MT','/utf-8',"/Fo$temp/gatt.obj","/Fe$dest/EverywhereGatt.exe","$qt/native/gatt.cpp",'windowsapp.lib')
     $identityDir = Join-Path $dest 'asset/mfi'
     $null = New-Item -ItemType Directory -Path $identityDir -Force
-    Copy-Item "$mfi/certificate.p7b" $identityDir
-    if ($EmbedMfiKey) {Copy-Item "$mfi/identity.pk8" $identityDir}
+    foreach ($name in $identityFiles) { Copy-Item "$mfi/$name" $identityDir }
     $src = "$dest/source"
     $null = New-Item -ItemType Directory "$src/swift/Host/IAP2Client" -Force
     foreach ($name in @('LICENSE','NOTICE','src','README.md','main.py')) {Copy-Item "$accessory/$name" "$src/swift/Host/IAP2Client/" -Recurse}
-    Copy-Item $win "$src/windows" -Recurse
+    Copy-Item $qt "$src/qt" -Recurse
     Copy-Item "$root/package-windows.ps1" $src
     Copy-Item $modern "$src/swift/Host/ModernBackend" -Recurse
     Get-ChildItem $src -Directory -Recurse -Filter '__pycache__' | Remove-Item -Recurse -Force
@@ -59,14 +78,19 @@ try {
     Run "$dest/EverywhereGatt.exe" @('--self-test')
     Run "$dest/EverywhereWorker.exe" @('--self-test')
     Run "$dest/EverywhereWorker.exe" @('connect','--help')
-    if ($EmbedMfiKey) {Run "$dest/EverywhereWorker.exe" @('--verify-bundle')}
+    if ($identityFiles -contains 'identity.pk8') {Run "$dest/EverywhereWorker.exe" @('--verify-bundle')}
     $smoke = Start-Process -Wait -PassThru -FilePath "$dest/Everywhere.exe" -ArgumentList '--smoke-test'
     if ($smoke.ExitCode -ne 0) {throw 'Packaged Qt startup or dependency check failed'}
-    Run $py @('-m','unittest','discover','-s',"$win/tests",'-p','test_*.py')
-    $archive = "Everywhere-Windows-x64-"+(Get-Date -Format 'yyyyMMdd-HHmmss')+'-'+[guid]::NewGuid().ToString('N').Substring(0,6)+'.zip'
+    Run $py @('-m','unittest','discover','-s',"$qt/tests",'-p','test_*.py')
+    $archive = "Everywhere-Windows-x64-$appVersion-"+(Get-Date -Format 'yyyyMMdd-HHmmss')+'-'+[guid]::NewGuid().ToString('N').Substring(0,6)+'.zip'
     # tar includes hidden Qt files and does not impose Compress-Archive's individual file size limit.
     Run 'tar.exe' @('-a','-cf',"$temp/$archive",'-C',$stage,'Everywhere')
     Move-Item -LiteralPath "$temp/$archive" -Destination (Join-Path $OutputDirectory $archive)
+    # Keep the verified native helpers available when launching qt/app.py from source.
+    $devHelpers = Join-Path $root 'Build/QtHelpers/Windows'
+    $null = New-Item -ItemType Directory -Force -Path "$devHelpers/asset/mfi"
+    foreach ($name in @('EverywhereWorker.exe','rfcomm.exe','EverywhereGatt.exe')) {Copy-Item "$dest/$name" $devHelpers -Force}
+    foreach ($name in $identityFiles) { Copy-Item "$identityDir/$name" "$devHelpers/asset/mfi/" -Force }
     Write-Output (Join-Path $OutputDirectory $archive)
 } finally {
     Remove-Item -LiteralPath $temp -Recurse -Force

@@ -1,0 +1,10 @@
+PySide6>=6.8,<7
+bleak>=1.0,<4; sys_platform != "darwin"
+zeroconf>=0.146,<1
+keyring>=25,<27
+cryptography>=43
+PyInstaller>=6.12,<7
+
+pywin32>=308; sys_platform == "win32"
+dbus-next>=0.2.3,<0.3; sys_platform == "linux"
+SecretStorage>=3.3,<4; sys_platform == "linux"

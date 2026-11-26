@@ -1,0 +1,53 @@
+name: Package Swift
+
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Platform to package
+        type: choice
+        default: all
+        options:
+          - all
+          - x64
+          - arm64
+
+permissions:
+  contents: read
+
+jobs:
+  package-mac:
+    name: package-mac-${{ matrix.arch }}
+    runs-on: ${{ matrix.arch == 'x64' && 'macos-26-intel' || 'macos-26' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ${{ fromJSON(inputs.target == 'x64' && '["x64"]' || inputs.target == 'arm64' && '["arm64"]' || '["x64","arm64"]') }}
+    env:
+      EVERYWHERE_BUNDLE_MFI_IDENTITY: '1'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          architecture: ${{ matrix.arch }}
+      - uses: ./.github/actions/prepare-mfi
+      - name: Package Swift MacHost and verify its architecture
+        env:
+          MACHO_ARCH: ${{ matrix.arch == 'x64' && 'x86_64' || 'arm64' }}
+        run: |
+          test "$(uname -m)" = "$MACHO_ARCH"
+          ./package.sh --mac-only Build/Exports
+          bundles=(Build/Exports/Everywhere-mac-*/Everywhere.app)
+          test "${#bundles[@]}" -eq 1
+          app="${bundles[0]}"
+          for binary in Contents/MacOS/MacHost Contents/Helpers/DeviceLocation.app/Contents/MacOS/DeviceLocation Contents/Helpers/AccessoryLocation.app/Contents/MacOS/accessory-location; do
+            xcrun lipo -verify_arch "$MACHO_ARCH" "$app/$binary"
+          done
+      - uses: actions/upload-artifact@v6
+        with:
+          name: package-mac-${{ matrix.arch }}
+          path: Build/Exports/Everywhere-mac-*/Everywhere-macOS.zip
+          if-no-files-found: error
+          compression-level: 0

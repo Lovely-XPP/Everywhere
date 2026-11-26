@@ -5,6 +5,7 @@ set -euo pipefail
 root=$(cd -- "$(dirname -- "$0")" && pwd -P)
 host="$root/swift/Host"
 identity=${MAC_SIGN_IDENTITY:--}
+bundle_identity=${EVERYWHERE_BUNDLE_MFI_IDENTITY:-1}
 mode=all
 die() { printf '%s\n' "$*" >&2; exit 1; }
 usage() {
@@ -113,14 +114,16 @@ package_iap2() {
     xcrun clang -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker "$src/BridgeInfo.plist" \
         -fobjc-arc -framework Foundation -framework IOBluetooth "$src/native/bluetooth_bridge.m" -o "$helper/bluetooth-bridge"
     MACOSX_DEPLOYMENT_TARGET=14.0 xcrun swiftc -O "$src/native/mfi_auth.swift" -o "$helper/mfi-auth"
-    install -m 644 "$root/asset/mfi/certificate.p7b" "$credentials/"
-    install -m 644 "$root/asset/mfi/identity.pk8" "$credentials/"
+    if [[ $bundle_identity != 0 ]]; then
+        install -m 644 "$root/asset/mfi/certificate.p7b" "$credentials/"
+        install -m 644 "$root/asset/mfi/identity.pk8" "$credentials/"
+    fi
     local tool
     for tool in AccessoryLocation.app bluetooth-bridge mfi-auth; do
         codesign --force --sign "$identity" "$helper/$tool"
         codesign --verify --strict "$helper/$tool"
     done
-    "$helper/mfi-auth" verify-bundle
+    if [[ $bundle_identity != 0 ]]; then "$helper/mfi-auth" verify-bundle; fi
     cp "$src/LICENSE" "$src/NOTICE" "$notices/"
     "$python" - "$notices" <<'PY'
 from importlib import metadata
@@ -167,7 +170,9 @@ package_backend() {
 
 package_mac() {
     local app="$stage/Everywhere.app" products iap_python
-    [[ -r "$root/asset/mfi/certificate.p7b" && -r "$root/asset/mfi/identity.pk8" ]] || die '缺少 asset/mfi 配件身份。'
+    if [[ $bundle_identity != 0 ]]; then
+        [[ -r "$root/asset/mfi/certificate.p7b" && -r "$root/asset/mfi/identity.pk8" ]] || die '缺少 asset/mfi 配件身份。'
+    fi
     iap_python=$(build_python iap2)
     local opts=(--package-path "$root/swift" --scratch-path "$work/mac" --cache-path "$work/cache" --configuration release)
     if [[ ${EVERYWHERE_NESTED_SANDBOX:-0} == 1 ]]; then opts+=(--disable-sandbox); fi
@@ -185,7 +190,7 @@ package_mac() {
     ditto -c -k --sequesterRsrc --keepParent "$app" "$stage/Everywhere-macOS.zip"
     ditto -x -k "$stage/Everywhere-macOS.zip" "$work/mac-verify"
     codesign --verify --deep --strict "$work/mac-verify/Everywhere.app"
-    "$work/mac-verify/Everywhere.app/Contents/Helpers/mfi-auth" verify-bundle
+    if [[ $bundle_identity != 0 ]]; then "$work/mac-verify/Everywhere.app/Contents/Helpers/mfi-auth" verify-bundle; fi
 }
 
 package_ios() {

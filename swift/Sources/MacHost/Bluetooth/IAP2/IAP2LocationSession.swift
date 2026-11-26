@@ -1,3 +1,4 @@
+import DeviceBackend
 import Combine
 import Foundation
 import IOBluetooth
@@ -34,6 +35,7 @@ final class IAP2LocationSession: ObservableObject {
     private var commandInput: FileHandle?
     private var process: Process?
     @Published private(set) var stopping = false
+    private var restoring = false
     private var timedOut = false
     private var acknowledged = false
     private var watchdog: Task<Void, Never>?
@@ -167,6 +169,7 @@ final class IAP2LocationSession: ObservableObject {
         acknowledged = false
         stopping = false
         timedOut = false
+        restoring = false
         status = "正在建立 iAP2 蓝牙会话…"
         watchdog = Task {
             do { try await Task.sleep(for: .seconds(220)) } catch { return }
@@ -260,6 +263,7 @@ final class IAP2LocationSession: ObservableObject {
             if timedOut { status = "等待 iPhone 完成握手或认证超时，会话已结束。" }
             else if let failure { status = failure }
             else if !stopping && client.terminationStatus != 0 { status = "客户端退出（\(client.terminationStatus)），最后阶段 · " + last }
+            else if restoring { status = "配件位置输出已结束。请在 iPhone 地图点“我的位置”，核对新的定位样本。" }
             else if acknowledged { status = "会话已结束 · 本次定位数据收到回执，请在 iPhone 核对定位恢复情况。" }
             else if stopping { status = "会话已停止。" }
             else { status = "会话已结束 · " + last }
@@ -267,6 +271,7 @@ final class IAP2LocationSession: ObservableObject {
             commandInput = nil
             requestedPoint = nil
             updatingPoint = false
+            acknowledgedPoint = nil
             process = nil
             reconnecting = false
             needsResume = false
@@ -337,16 +342,39 @@ final class IAP2LocationSession: ObservableObject {
         }
     }
 
+    /// 有本次配件选点时允许恢复，手机暂停订阅或正在重连时仍可结束输出。
+    var canRestore: Bool { running && !stopping && requestedPoint != nil }
+
+    /// 仅结束用户确认的设备、客户端和重连代次。配件退出后由手机重新选择位置源。
+    func prepareRestore() -> (() -> Void)? {
+        guard canRestore, let client = process else { return nil }
+        let target = address
+        let revision = generation
+        return {
+            guard self.process === client, self.address == target, self.generation == revision, self.canRestore else { return }
+            self.restoring = true
+            self.stop()
+        }
+    }
+
     /// 停止当前客户端并释放其蓝牙连接；系统真实坐标恢复由手机独立观测。
     func stop() {
         guard let client = process, client.isRunning, !stopping else { return }
         stopping = true
         authenticated = false
-        status = "正在结束 iAP2 会话…"
-        client.interrupt()
+        status = restoring ? "正在停止配件位置输出…" : "正在结束 iAP2 会话…"
+        if restoring {
+            try? commandInput?.close()
+            commandInput = nil
+        } else { client.interrupt() }
         Task {
             try? await Task.sleep(for: .seconds(2))
             guard self.process === client, client.isRunning else { return }
+            if self.restoring {
+                client.interrupt()
+                try? await Task.sleep(for: .seconds(2))
+                guard self.process === client, client.isRunning else { return }
+            }
             client.terminate()
             try? await Task.sleep(for: .seconds(2))
             if self.process === client, client.isRunning { kill(client.processIdentifier, SIGKILL) }

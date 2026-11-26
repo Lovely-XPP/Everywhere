@@ -1,0 +1,15 @@
+name: Prepare bundled MFi identity
+description: Copy the accessory certificate and key from the v0.1.0 release into the build workspace.
+runs:
+  using: composite
+  steps:
+    - name: Download the release asset and prepare the identity
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        work=$(mktemp -d)
+        trap 'rm -rf "$work"' EXIT
+        gh release download v0.1.0 --repo Lovely-XPP/Everywhere --pattern asset.zip --output "$work/asset.zip"
+        python .github/actions/prepare-mfi/extract.py "$work/asset.zip"
