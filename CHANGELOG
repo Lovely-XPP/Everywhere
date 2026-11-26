@@ -12,6 +12,7 @@
 
 修复bug
 
+- Android APK 的 CI 构建通过 Google Cloud 镜像获取 Maven Central 依赖，修复 Gradle 下载依赖遇到 HTTP 429 后中断发布打包的问题。
 - Android 本地及 CI 打包自动选择已安装的 SDK 平台、Build Tools 和兼容 NDK，仅选择 Android 工具实际识别的目标 API，避免 runner 把不可用的平台交给编译器。
 - 修复 Windows 版 Everywhere 因作业对象名称无效而在主窗口显示前退出的问题。打包自检会显示当前检查项和失败原因，超时后输出诊断日志并终止检查。
 - 修复 Windows x64 安装包缺少 Wintun 动态库的问题，并纠正桌面安装包中设备隧道依赖的模块名。Windows 打包会校验 Python 的 x64 架构，自检会加载原生窗口插件，并检查凭据后端和地图所需的 Qt HTTPS 支持。

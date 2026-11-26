@@ -64,6 +64,7 @@ jobs:
           export EVERYWHERE_ANDROID_KEYSTORE="$APK_SIGNING_DIR/release.p12"
           export EVERYWHERE_ANDROID_PASSWORD_FILE="$APK_SIGNING_DIR/password"
           unset ANDROID_NDK_ROOT  # 由项目在 runner 的并存 NDK 中选择 Qt 兼容版本
+          install -Dm644 .github/scripts/apk-repositories.init.gradle Build/AndroidEnv/gradle/init.d/apk-repositories.init.gradle
           ./setup-android.sh --release
 
       - name: Remove signing files
