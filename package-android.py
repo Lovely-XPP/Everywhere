@@ -108,6 +108,7 @@ def build(args):
         app = config["app"]
         app.update({"package.name": "everywhere", "package.domain": "com.virtuallocation",
                     "version": release, "android.archs": "arm64-v8a",
+                    "icon.filename": str(ROOT / "swift/Apps/Mobile/Mobile/Assets.xcassets/AppIcon.appiconset/AppIcon.png"),
                     "orientation": "portrait, landscape, portrait-reverse, landscape-reverse",
                     "android.minapi": str(minimum), "android.ndk_api": str(minimum),
                     "android.permissions": "android.permission.INTERNET,"
