@@ -9,8 +9,8 @@
 | 平台 | 打包命令 | 产物和启动方式 |
 | --- | --- | --- |
 | macOS 14+ | `./package-python-macos.sh` | 与构建机架构对应的 ZIP，解压双击 `EverywhereQt.app` |
-| Windows 11 x64 | `.\package-windows.ps1` | x64 ZIP，解压完整目录并打开 `Everywhere.exe` |
-| Linux 桌面 | `./package-python-linux.sh` | 与构建机架构对应的 `.tar.gz`，解压后运行 `./EverywhereQt/EverywhereQt` |
+| Windows 11 x64 | `.\package-windows.ps1` | 双击生成的 x64 单文件 EXE |
+| Linux 桌面 | `./package-python-linux.sh` | 给单文件程序添加执行权限（`chmod +x 文件名`），运行 `./文件名` |
 
 **macOS**。构建机需要含 macOS SDK、clang 和 Swift 5.9 或更新版本的 Apple 开发工具。经典蓝牙通过 IOBluetooth 连接，BLE 双向传输复用原 Swift 版的 CoreBluetooth 后端。运行端按系统提示允许蓝牙与本地网络。默认产物在本地作 ad-hoc 签名。原生 Swift macOS 和 iPhone/iPad 使用原入口 `./package.sh`。
 
@@ -36,7 +36,7 @@ macOS/Linux 还支持 `--output-dir 目录`、`--prepared-python 已装完整依
 .\package-windows.ps1
 ```
 
-脚本编译 RFCOMM 和 GATT 辅助程序，冻结 Qt 客户端和已有设备后端，运行协议回归、辅助进程自检以及打包后的 Qt 启动检查。通过后在 `Build/Exports/` 生成带时间戳的 x64 ZIP。解压完整目录后打开 `Everywhere.exe`，运行端使用随包的 Qt 和 Python。USB 设备识别依赖可用的 Apple 设备服务。
+脚本编译 RFCOMM 和 GATT 辅助程序，冻结 Qt 客户端和已有设备后端，运行协议回归、辅助进程自检以及打包后的 Qt 启动检查。通过后在 `Build/Exports/` 生成 `Everywhere-<版本>-windows-x64.exe`。Windows 和 Linux 单文件程序启动时会将 Qt、Python 和辅助程序释放到临时目录。Linux 的临时目录需要允许执行程序。USB 设备识别依赖可用的 Apple 设备服务。
 
 可通过 `EVERYWHERE_AUTH_PROVIDER` 指定兼容的外部认证程序。
 

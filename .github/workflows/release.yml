@@ -37,6 +37,12 @@ jobs:
           pattern: package-*
           path: packages
           merge-multiple: false
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: Everywhere-*
+          path: packages/qt
+          merge-multiple: true
+          skip-decompress: true
       - name: Publish release packages
         env:
           GH_TOKEN: ${{ github.token }}

@@ -28,8 +28,8 @@
 | --- | --- | --- |
 | macOS（Swift） | 在项目根目录运行 `./package.sh`。[Apple 构建要求](#导出-ipa-和-mac-app) | 运行 `open Build/Everywhere/Everywhere.app` |
 | macOS（Python/Qt） | `./package-python-macos.sh` | 解压 ZIP 并打开 `EverywhereQt.app` |
-| Linux 桌面（Python/Qt） | `./package-python-linux.sh` | 解压 tar.gz 并运行 `./EverywhereQt/EverywhereQt` |
-| Windows x64 | 在项目根目录的 PowerShell 运行 `.\package-windows.ps1`。[Windows 构建要求](qt/README.md) | 解压 `Build/Exports/` 中生成的 ZIP，打开 `Everywhere.exe` |
+| Linux 桌面（Python/Qt） | `./package-python-linux.sh` | 给下载的文件添加执行权限（`chmod +x 文件名`），然后运行 `./文件名` |
+| Windows x64 | 在项目根目录的 PowerShell 运行 `.\package-windows.ps1`。[Windows 构建要求](qt/README.md) | 双击 `Build/Exports/` 中生成的 `.exe` 文件 |
 
 1. **连接设备**。选择「软件模拟模式」，解锁 iPhone 或 iPad，用 USB 数据线连接电脑，在设备上确认信任，并按提示开启开发者模式。在控制台选中目标设备。
 2. **发送位置**。在地图上选点，点击「发送地图选点」，阅读操作说明并点击「我已知晓」。在目标设备的「诊断」中查看新的定位样本。
@@ -37,7 +37,7 @@
 
 ### GitHub Actions 安装包
 
-在仓库的 **Actions** 页面打开一次成功运行，在 **Artifacts** 下载对应架构的安装包。Swift 工作流生成 `package-mac-x64` 和 `package-mac-arm64`（ZIP），Qt 工作流生成 `package-linux-x64`（tar.gz）和 `package-windows-x64`（ZIP）。Android 工作流 `package-apk` 生成 Qt 6.8.3 的 arm64 签名 APK。
+在仓库的 **Actions** 页面打开一次成功运行，在 **Artifacts** 下载对应架构的安装包。Swift 工作流生成 `package-mac-x64` 和 `package-mac-arm64`（ZIP），Qt 工作流直接提供 Windows x64 单文件 EXE 和 Linux x64 单文件可执行程序。Android 工作流 `package-apk` 生成 Qt 6.8.3 的 arm64 签名 APK。
 
 在 **Actions → Release → Run workflow** 选择要发布的分支或标签。工作流构建该提交的五个安装包，从 Qt 代码读取版本并核对 Swift 版本，提取根目录 `CHANGELOG` 中同一版本的更新记录，全部成功后发布 `v<版本号>` 和五个附件。单独测试打包可手动运行 **Package Swift**、**Package Qt** 或 **package-apk**。推送和拉取请求均不会触发打包或发布。
 

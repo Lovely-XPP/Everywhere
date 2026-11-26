@@ -39,12 +39,11 @@ jobs:
         run: |
           test "$(uname -m)" = x86_64
           ./package-python-linux.sh --output-dir Build/Exports
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
-          name: package-linux-x64
-          path: Build/Exports/EverywhereQt-Linux-x86_64-*.tar.gz
+          path: Build/Exports/Everywhere-*-linux-x64
           if-no-files-found: error
-          compression-level: 0
+          archive: false
 
   package-windows-x64:
     if: inputs.target != 'linux-x64'
@@ -63,9 +62,8 @@ jobs:
         env:
           EVERYWHERE_QT_PYTHON: ${{ steps.python.outputs.python-path }}
         run: .\package-windows.ps1
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
-          name: package-windows-x64
-          path: Build/Exports/Everywhere-Windows-x64-*.zip
+          path: Build/Exports/Everywhere-*-windows-x64.exe
           if-no-files-found: error
-          compression-level: 0
+          archive: false

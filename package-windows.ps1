@@ -86,13 +86,10 @@ VSVersionInfo(ffi=FixedFileInfo(filevers=($versionTuple),prodvers=($versionTuple
   kids=[StringFileInfo([StringTable('040904b0',[StringStruct('ProductName','Everywhere'),StringStruct('FileVersion','$appVersion'),StringStruct('ProductVersion','$appVersion')])]),
         VarFileInfo([VarStruct('Translation',[1033,1200])])])
 "@ | Set-Content -LiteralPath $versionFile -Encoding ASCII
-    Run $py ($common + $deviceDependencies + @('--name','Everywhere','--version-file',$versionFile,'--windowed','--onedir','--hidden-import','portable_location','--collect-submodules','bleak.backends.winrt','--copy-metadata','keyring','--hidden-import','keyring.backends.Windows',"$qt/windows_entry.py"))
-    $dest = "$stage/Everywhere"
-    if (!(Test-Path -LiteralPath "$dest/_internal/$wintunBin/wintun.dll" -PathType Leaf)) {
-        throw "Packaged Qt app is missing $wintunBin/wintun.dll"
-    }
+    $dest = Join-Path $temp 'payload'
+    $null = New-Item -ItemType Directory $dest
     Run $py ($common + @('--name','EverywhereWorker','--console','--onefile',"$qt/worker.py"))
-    Copy-Item "$stage/EverywhereWorker.exe" $dest
+    Move-Item -LiteralPath "$stage/EverywhereWorker.exe" -Destination $dest
     Run 'cl.exe' @('/nologo','/std:c++17','/EHsc','/O2','/MT','/utf-8',"/Fo$temp/rfcomm.obj","/Fe$dest/rfcomm.exe","$qt/native/rfcomm.cpp",'ws2_32.lib','Bthprops.lib')
     Run 'cl.exe' @('/nologo','/std:c++20','/EHsc','/O2','/MT','/utf-8',"/Fo$temp/gatt.obj","/Fe$dest/EverywhereGatt.exe","$qt/native/gatt.cpp",'windowsapp.lib')
     $identityDir = Join-Path $dest 'asset/mfi'
@@ -105,34 +102,28 @@ VSVersionInfo(ffi=FixedFileInfo(filevers=($versionTuple),prodvers=($versionTuple
     Copy-Item "$root/package-windows.ps1" $src
     Copy-Item $modern "$src/swift/Host/ModernBackend" -Recurse
     Get-ChildItem $src -Directory -Recurse -Filter '__pycache__' | Remove-Item -Recurse -Force
-    Invoke-PackageCheck 'RFCOMM helper' "$dest/rfcomm.exe" @('--self-test')
-    Invoke-PackageCheck 'GATT helper' "$dest/EverywhereGatt.exe" @('--self-test')
-    Invoke-PackageCheck 'iAP2 worker' "$dest/EverywhereWorker.exe" @('--self-test')
-    Invoke-PackageCheck 'Worker connect CLI' "$dest/EverywhereWorker.exe" @('connect','--help')
-    if ($identityFiles -contains 'identity.pk8') {
-        Invoke-PackageCheck 'Bundled identity' "$dest/EverywhereWorker.exe" @('--verify-bundle')
-    }
+    $product = "Everywhere-$appVersion-windows-x64"
+    Run $py ($common + $deviceDependencies + @('--name',$product,'--version-file',$versionFile,'--windowed','--onefile','--add-data',"${dest}:.",'--hidden-import','portable_location','--collect-submodules','bleak.backends.winrt','--copy-metadata','keyring','--hidden-import','keyring.backends.Windows',"$qt/windows_entry.py"))
+    $smokeArgs = @('--smoke-test')
+    if ($identityFiles -contains 'identity.pk8') { $smokeArgs += '--verify-bundle' }
     $previousSmokeLog = $env:EVERYWHERE_SMOKE_LOG
     $smokeLog = Join-Path $temp 'qt-smoke.log'
     try {
         $env:EVERYWHERE_SMOKE_LOG = $smokeLog
-        Invoke-PackageCheck 'Packaged Qt startup and shutdown' "$dest/Everywhere.exe" @('--smoke-test')
+        Invoke-PackageCheck 'Packaged Qt startup and shutdown' "$stage/$product.exe" $smokeArgs 180
     } finally {
         $env:EVERYWHERE_SMOKE_LOG = $previousSmokeLog
         if (Test-Path -LiteralPath $smokeLog) { Get-Content -LiteralPath $smokeLog -Encoding UTF8 }
     }
     Invoke-PackageCheck 'Qt unit tests' $py @('-u','-m','unittest','discover','-v','-s','qt/tests','-p','test_*.py') 300
-    $archive = "Everywhere-Windows-x64-$appVersion-"+(Get-Date -Format 'yyyyMMdd-HHmmss')+'-'+[guid]::NewGuid().ToString('N').Substring(0,6)+'.zip'
-    # tar includes hidden Qt files and does not impose Compress-Archive's individual file size limit.
-    Write-Host "[archive] $archive"
-    Run 'tar.exe' @('-a','-cf',"$temp/$archive",'-C',$stage,'Everywhere')
-    Move-Item -LiteralPath "$temp/$archive" -Destination (Join-Path $OutputDirectory $archive)
     # Keep the verified native helpers available when launching qt/app.py from source.
     $devHelpers = Join-Path $root 'Build/QtHelpers/Windows'
     $null = New-Item -ItemType Directory -Force -Path "$devHelpers/asset/mfi"
     foreach ($name in @('EverywhereWorker.exe','rfcomm.exe','EverywhereGatt.exe')) {Copy-Item "$dest/$name" $devHelpers -Force}
     foreach ($name in $identityFiles) { Copy-Item "$identityDir/$name" "$devHelpers/asset/mfi/" -Force }
-    Write-Output (Join-Path $OutputDirectory $archive)
+    $outputFile = Join-Path $OutputDirectory "$product.exe"
+    Move-Item -LiteralPath "$stage/$product.exe" -Destination $outputFile -Force
+    Write-Output $outputFile
 } finally {
     Remove-Item -LiteralPath $temp -Recurse -Force
 }

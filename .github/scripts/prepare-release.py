@@ -29,8 +29,8 @@ def prepare(packages: Path, output: Path) -> str:
     archives = [
         ("package-mac-x64", "Everywhere-macOS.zip", "mac-x64.zip"),
         ("package-mac-arm64", "Everywhere-macOS.zip", "mac-arm64.zip"),
-        ("package-linux-x64", f"EverywhereQt-Linux-x86_64-{version}-*.tar.gz", "linux-x64.tar.gz"),
-        ("package-windows-x64", f"Everywhere-Windows-x64-{version}-*.zip", "windows-x64.zip"),
+        ("qt", f"Everywhere-{version}-linux-x64", "linux-x64"),
+        ("qt", f"Everywhere-{version}-windows-x64.exe", "windows-x64.exe"),
         ("package-apk", f"Everywhere-{version}-arm64-release.apk", "android-arm64.apk"),
     ]
     for artifact, pattern, suffix in archives:

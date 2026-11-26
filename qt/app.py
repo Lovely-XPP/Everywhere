@@ -707,6 +707,9 @@ def main():
             pass
     w=Desk(smoke_test=smoke)
     if smoke:
+        if getattr(sys,'frozen',False) and sys.platform in ('win32','linux'):
+            from host_platform import check_bundled_helpers
+            check_bundled_helpers('--verify-bundle' in sys.argv)
         print('Checking device, Bluetooth, keyring and TLS dependencies',flush=True)
         import portable_location
         import importlib

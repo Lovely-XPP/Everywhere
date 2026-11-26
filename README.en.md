@@ -28,8 +28,8 @@
 | --- | --- | --- |
 | macOS (Swift) | Run `./package.sh`. [Apple build requirements](#export-the-ipa-and-mac-app) | Run `open Build/Everywhere/Everywhere.app`. |
 | macOS (Python/Qt) | `./package-python-macos.sh` | Extract the ZIP and open `EverywhereQt.app`. |
-| Linux desktop (Python/Qt) | `./package-python-linux.sh` | Extract the tar.gz and run `./EverywhereQt/EverywhereQt`. |
-| Windows x64 | Run `.\package-windows.ps1` in PowerShell. [Windows build requirements (Chinese)](qt/README.md) | Extract the ZIP in `Build/Exports/` and open `Everywhere.exe`. |
+| Linux desktop (Python/Qt) | `./package-python-linux.sh` | Make the downloaded file executable with `chmod +x <filename>`, then run `./<filename>`. |
+| Windows x64 | Run `.\package-windows.ps1` in PowerShell. [Windows build requirements (Chinese)](qt/README.md) | Double-click the standalone `.exe` in `Build/Exports/`. |
 
 1. **Connect your device.** Choose **Software simulation**, unlock the iPhone or iPad, and connect it to the computer with a USB data cable. Confirm trust, enable Developer Mode if prompted, and select the device in the console.
 2. **Send a location.** Pick a point on the map, choose **Send map point**, read the instructions, and select **I understand**. Open Diagnostics on the target device to check a fresh location sample.
@@ -37,7 +37,7 @@
 
 ### GitHub Actions packages
 
-Open a successful run under **Actions** and download the package for your architecture from **Artifacts**. The Swift workflow produces `package-mac-x64` and `package-mac-arm64` (ZIP). The Qt workflow produces `package-linux-x64` (tar.gz) and `package-windows-x64` (ZIP). The `package-apk` workflow produces a signed Qt 6.8.3 arm64 Android APK.
+Open a successful run under **Actions** and download the package for your architecture from **Artifacts**. The Swift workflow produces `package-mac-x64` and `package-mac-arm64` (ZIP). The Qt workflow provides one downloadable executable per platform for Linux x64 and Windows x64. The `package-apk` workflow produces a signed Qt 6.8.3 arm64 Android APK.
 
 Choose the branch or tag under **Actions → Release → Run workflow**. The workflow builds all five packages for that commit, reads the Qt version, checks it against the Swift app, and extracts the matching section from the root `CHANGELOG`. Once all packages succeed, it publishes `v<version>` with five downloadable assets. To build without publishing, manually run **Package Swift**, **Package Qt** or **package-apk**. Pushes and pull requests do not start builds or releases.
 

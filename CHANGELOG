@@ -2,6 +2,7 @@
 
 新增功能
 
+- Windows x64 和 Linux x64 现在各提供一个可执行文件，内置 Qt 和辅助程序，可从 GitHub Actions 或 Release 直接下载运行。
 - 可在 GitHub Actions 手动打包，或通过 Release 一次发布 Swift 版 macOS Intel、Apple Silicon、Qt 版 Linux、Windows x64 安装包和 Android arm64 签名 APK。版本号与发布说明自动从代码和 CHANGELOG 读取，五种构建均内置 v0.1.0 Release 的 MFi 配件身份。
 - 新增 Android Qt 配件定位前台原型和 Qt 6.8.3 arm64 APK 发布签名构建入口（目标 Android 9.0 起，无需 root），支持选择已配对的 iPhone、认证后发送地图选点和结束会话。真机兼容性待验证。
 - Qt 地图保留 WGS 84 和 GCJ-02 两项，OpenStreetMap 在两种设置下使用相同的 WGS 84 经纬度。切换选项时保留地图中心和草稿位置。

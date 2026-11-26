@@ -1,4 +1,4 @@
-"""在当前 macOS 或 Linux 构建可独立运行的 Qt 目录包，验证后发布。"""
+"""在 macOS 导出 Qt 应用包，在 Linux 导出自包含的单个可执行文件。"""
 import argparse
 import os
 from pathlib import Path
@@ -51,10 +51,11 @@ def helpers(dest, scratch, python, frozen):
         shutil.copy2(Path(products)/'QtBluetoothBridge',dest/'QtBluetoothBridge')
         run(dest/'QtBluetoothBridge','--self-test')
     if frozen:
-        gui='"$(dirname "$0")/EverywhereQt"'
         if MAC:
             run('xcrun','clang','-mmacosx-version-min=14.0','-O2', SRC/'native/mac_worker.c','-o',dest/'EverywhereWorker')
         else:
+            # 主程序可能已被改名或移动，由运行中的宿主传入实际路径。
+            gui='"$EVERYWHERE_QT_EXECUTABLE"'
             wrapper(dest/'EverywhereWorker',gui+' --qt-worker')
             wrapper(dest/'rfcomm',gui+' --linux-rfcomm')
             wrapper(dest/'EverywhereGatt',gui+' --linux-gatt')
@@ -85,18 +86,7 @@ def build(args, scratch, python):
     run(python,'-m','pip','check')
     qt_env={**os.environ,'QT_QPA_PLATFORM':'offscreen','PYTHONDONTWRITEBYTECODE':'1'}
     run(python,'-m','unittest','discover','-s',SRC/'tests',env=qt_env)
-    options=['--windowed','--icon',ROOT/'swift/Host/MacApp/VirtualLocation.icns',
-             '--osx-bundle-identifier','com.virtuallocation.everywhere.qt','--hidden-import','keyring.backends.macOS'] if MAC else [
-             '--hidden-import','keyring.backends.SecretService','--collect-submodules','bleak.backends.bluezdbus']
-    run(python,'-m','PyInstaller','--noconfirm','--noupx','--onedir','--name',APP,'--distpath',stage,
-        '--workpath',scratch/'work','--specpath',scratch,'--paths',MODERN,'--paths',IAP2/'src',
-        '--recursive-copy-metadata','pymobiledevice3','--collect-data','pymobiledevice3','--collect-data','developer_disk_image',
-        '--collect-submodules','pmd_pytcp','--copy-metadata','keyring','--exclude-module','pytest',
-        '--exclude-module','IPython',*options,SRC/'app.py')
-    product=stage/(APP+'.app' if MAC else APP)
-    bin_dir=product/'Contents/MacOS' if MAC else product
-    resources=product/'Contents/Resources' if MAC else product
-    helpers(bin_dir,scratch,python,True)
+    resources=scratch/'payload'
     dest=resources/'asset/mfi'
     dest.mkdir(parents=True)
     for name in identity_files:
@@ -117,31 +107,52 @@ def build(args, scratch, python):
     with tarfile.open(license_dir/'source.tar.gz','w:gz') as files:
         for path in source_paths:
             files.add(ROOT/path, arcname=path, filter=source_only)
-    if MAC:
-        info=product/'Contents/Info.plist'
-        metadata=plistlib.loads(info.read_bytes())
-        metadata.update(CFBundleShortVersionString=VERSION, CFBundleVersion='2',
-                        NSBluetoothAlwaysUsageDescription='连接所选 iPhone 以传输选点，或向手机提供蓝牙状态。',
-                        NSLocalNetworkUsageDescription='发现和连接已配对的局域网 iPhone。',
-                        NSBonjourServices=['_apple-mobdev2._tcp','_vloc-remote._tcp'],LSMinimumSystemVersion='14.0')
-        info.write_bytes(plistlib.dumps(metadata))
-        for binary in ('rfcomm','QtBluetoothBridge','EverywhereWorker'):
-            run('codesign','--force','--sign','-',bin_dir/binary)
-        run('codesign','--force','--sign','-',product)
-        run('codesign','--verify','--deep','--strict',product)
-    else:
-        run(bin_dir/'rfcomm','--self-test')
-        run(bin_dir/'EverywhereGatt','--self-test')
+    if not MAC:
+        helpers(resources,scratch,python,True)
+    options=['--windowed','--icon',ROOT/'swift/Host/MacApp/VirtualLocation.icns',
+             '--osx-bundle-identifier','com.virtuallocation.everywhere.qt','--hidden-import','keyring.backends.macOS'] if MAC else [
+             '--hidden-import','keyring.backends.SecretService','--collect-submodules','bleak.backends.bluezdbus']
+    if not MAC:
+        options += ['--add-data',f'{resources}:.']
+    run(python,'-m','PyInstaller','--noconfirm','--noupx','--onedir' if MAC else '--onefile','--name',APP,'--distpath',stage,
+        '--workpath',scratch/'work','--specpath',scratch,'--paths',MODERN,'--paths',IAP2/'src',
+        '--recursive-copy-metadata','pymobiledevice3','--collect-data','pymobiledevice3','--collect-data','developer_disk_image',
+        '--collect-submodules','pmd_pytcp','--copy-metadata','keyring','--exclude-module','pytest',
+        '--exclude-module','IPython',*options,SRC/'app.py')
+    product=stage/(APP+'.app' if MAC else APP)
+    if not MAC:
+        arch={'x86_64':'x64','aarch64':'arm64'}.get(platform.machine(),platform.machine())
+        executable=stage/f'Everywhere-{VERSION}-linux-{arch}'
+        product.rename(executable)
+        smoke_args=['--smoke-test']
+        if 'identity.pk8' in identity_files: smoke_args.append('--verify-bundle')
+        run(executable,*smoke_args,env=qt_env,timeout=120)
+        if 'identity.pk8' in identity_files: executable.chmod(0o700)
+        shutil.move(str(executable),out/executable.name)
+        print(out/executable.name,flush=True)
+        return
+
+    bin_dir=product/'Contents/MacOS'
+    helpers(bin_dir,scratch,python,True)
+    shutil.copytree(resources,product/'Contents/Resources',dirs_exist_ok=True)
+    info=product/'Contents/Info.plist'
+    metadata=plistlib.loads(info.read_bytes())
+    metadata.update(CFBundleShortVersionString=VERSION, CFBundleVersion='2',
+                    NSBluetoothAlwaysUsageDescription='连接所选 iPhone 以传输选点，或向手机提供蓝牙状态。',
+                    NSLocalNetworkUsageDescription='发现和连接已配对的局域网 iPhone。',
+                    NSBonjourServices=['_apple-mobdev2._tcp','_vloc-remote._tcp'],LSMinimumSystemVersion='14.0')
+    info.write_bytes(plistlib.dumps(metadata))
+    for binary in ('rfcomm','QtBluetoothBridge','EverywhereWorker'):
+        run('codesign','--force','--sign','-',bin_dir/binary)
+    run('codesign','--force','--sign','-',product)
+    run('codesign','--verify','--deep','--strict',product)
     run(bin_dir/'EverywhereWorker','--self-test')
     run(bin_dir/'EverywhereWorker','connect','--help')
     if 'identity.pk8' in identity_files: run(bin_dir/'EverywhereWorker','--verify-bundle')
     run(bin_dir/APP,'--smoke-test',env=qt_env,timeout=90)
     name=f'{APP}-{SYSTEM}-{platform.machine()}-{VERSION}-{time.strftime("%Y%m%d-%H%M%S")}-{uuid.uuid4().hex[:6]}'
-    archive=scratch/(name+('.zip' if MAC else '.tar.gz'))
-    if MAC:
-        run('ditto','-c','-k','--keepParent',product,archive)
-    else:
-        with tarfile.open(archive,'w:gz') as tar: tar.add(product,arcname=APP)
+    archive=scratch/(name+'.zip')
+    run('ditto','-c','-k','--keepParent',product,archive)
     if 'identity.pk8' in identity_files:
         archive.chmod(0o600)
     shutil.move(str(archive),out/archive.name)

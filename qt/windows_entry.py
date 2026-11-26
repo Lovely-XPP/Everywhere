@@ -14,7 +14,7 @@ def launch():
 
 if __name__ == '__main__':
     log_path = os.environ.get('EVERYWHERE_SMOKE_LOG')
-    if sys.argv[1:] == ['--smoke-test'] and log_path:
+    if sys.argv[1:2] == ['--smoke-test'] and log_path:
         with open(log_path, 'w', encoding='utf-8', buffering=1) as log, redirect_stdout(log), redirect_stderr(log):
             print('Importing the packaged Qt application')
             faulthandler.dump_traceback_later(60, file=log)
