@@ -38,7 +38,8 @@ public enum RemotePairing {
         let options = tls.securityProtocolOptions
         sec_protocol_options_set_min_tls_protocol_version(options, .TLSv12)
         sec_protocol_options_set_max_tls_protocol_version(options, .TLSv12)
-        sec_protocol_options_append_tls_ciphersuite(options, tls_ciphersuite_t(rawValue: TLS_PSK_WITH_AES_128_GCM_SHA256)!)
+        let suiteID = UInt16(TLS_PSK_WITH_AES_128_GCM_SHA256)
+        sec_protocol_options_append_tls_ciphersuite(options, tls_ciphersuite_t(rawValue: suiteID)!)
         let key = Array(code.utf8).withUnsafeBytes { DispatchData(bytes: $0) }
         let identity = Array("VirtualLocation/1".utf8).withUnsafeBytes { DispatchData(bytes: $0) }
         sec_protocol_options_add_pre_shared_key(options, key as __DispatchData, identity as __DispatchData)

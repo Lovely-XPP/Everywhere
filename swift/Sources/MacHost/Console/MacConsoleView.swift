@@ -346,15 +346,34 @@ struct MacConsoleView: View {
                                        span: .init(latitudeDelta: 0.025, longitudeDelta: 0.025)))
     }
 
+    /// 将蓝牙标签和软件后端选择器的切换请求交给同一个会话模型。
+    private var backendSelection: Binding<ConsoleBackendMode> {
+        Binding(get: { model.backendMode }, set: { model.changeBackendMode($0) })
+    }
+
+    /// 按配件、Mac 扫手机、手机扫 Mac 的顺序显示三个蓝牙入口。
+    private var bluetoothModeTabs: MapTabs<ConsoleBackendMode> {
+        MapTabs([.iap2, .bluetooth, .reverseBluetooth], selection: backendSelection, title: { mode in
+            switch mode {
+            case .iap2: return "iAP2"
+            case .bluetooth: return "扫手机"
+            default: return "扫 Mac"
+            }
+        }, icon: { mode in
+            switch mode {
+            case .iap2: return "antenna.radiowaves.left.and.right"
+            case .bluetooth: return "iphone"
+            default: return "laptopcomputer"
+            }
+        })
+    }
+
     /// 两种手机 App 连接方向与移动端按钮一一对应。当前后端同时决定设备、命令及回执的去向。
     private var bluetoothConnectionPanel: some View {
         GroupBox("蓝牙连接方式") {
             VStack(alignment: .leading, spacing: 8) {
-                MapTabs([ConsoleBackendMode.iap2, .bluetooth, .reverseBluetooth],
-                        selection: Binding(get: { model.backendMode }, set: { model.changeBackendMode($0) }),
-                        title: { $0 == .iap2 ? "iAP2" : $0 == .bluetooth ? "扫手机" : "扫 Mac" },
-                        icon: { $0 == .iap2 ? "antenna.radiowaves.left.and.right" : $0 == .bluetooth ? "iphone" : "laptopcomputer" })
-                .disabled(iap2.running || !model.canChangeBackendMode)
+                bluetoothModeTabs
+                    .disabled(iap2.running || !model.canChangeBackendMode)
                 switch model.backendMode {
                 case .bluetooth:
                     Text("在手机 Everywhere 的「连接设置 → 蓝牙」点「让 Mac 扫描本机」。在下方扫描并连接手机，输入手机显示的六位接收码，即可更新手机 App 地图标记。")
@@ -373,10 +392,7 @@ struct MacConsoleView: View {
     private var backendPanel: some View {
         GroupBox("执行后端") {
             VStack(alignment: .leading, spacing: 8) {
-                Picker("连接方式", selection: Binding(
-                    get: { model.backendMode },
-                    set: { model.changeBackendMode($0) }
-                )) {
+                Picker("连接方式", selection: backendSelection) {
                     Text(ConsoleBackendMode.automatic.rawValue).tag(ConsoleBackendMode.automatic)
                     Text("仅 USB（Xcode）").tag(ConsoleBackendMode.wired)
                     Text("仅 Wi-Fi（Xcode）").tag(ConsoleBackendMode.wireless)
