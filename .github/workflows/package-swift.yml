@@ -43,7 +43,7 @@ jobs:
           test "${#bundles[@]}" -eq 1
           app="${bundles[0]}"
           for binary in Contents/MacOS/MacHost Contents/Helpers/DeviceLocation.app/Contents/MacOS/DeviceLocation Contents/Helpers/AccessoryLocation.app/Contents/MacOS/accessory-location; do
-            xcrun lipo -verify_arch "$MACHO_ARCH" "$app/$binary"
+            xcrun lipo "$app/$binary" -verify_arch "$MACHO_ARCH"
           done
       - uses: actions/upload-artifact@v6
         with:
