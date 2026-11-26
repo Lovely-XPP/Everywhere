@@ -681,7 +681,8 @@ def main():
         if sys.stdout is not None: print(VERSION)
         return 0
     smoke='--smoke-test' in sys.argv
-    if smoke: os.environ['QT_QPA_PLATFORM']='offscreen'
+    if smoke:
+        os.environ['QT_QPA_PLATFORM']='windows' if sys.platform=='win32' else 'offscreen'
     if sys.stderr is None: sys.stderr=open(os.devnull,'w',encoding='utf-8')
     if sys.stdout is None: sys.stdout=open(os.devnull,'w',encoding='utf-8')
     app=W.QApplication(sys.argv)
@@ -710,13 +711,21 @@ def main():
         import portable_location
         import importlib
         if sys.platform == 'win32':
+            from PySide6.QtNetwork import QSslSocket
+            from keyring.backends.Windows import WinVaultKeyring
+            if not WinVaultKeyring.viable:
+                raise RuntimeError('Windows credential backend is unavailable')
+            if not QSslSocket.supportsSsl():
+                raise RuntimeError('Qt HTTPS support for maps and place search is unavailable')
+            w.setAttribute(C.Qt.WA_DontShowOnScreen)
             importlib.import_module('bleak.backends.winrt.client')
             importlib.import_module('bleak.backends.winrt.scanner')
         elif sys.platform == 'linux':
             importlib.import_module('bleak.backends.bluezdbus.client')
             importlib.import_module('linux_gatt')
-        keyrings = {'darwin':'macOS', 'win32':'Windows', 'linux':'SecretService'}
-        importlib.import_module('keyring.backends.'+keyrings[sys.platform])
+        if sys.platform != 'win32':
+            keyrings = {'darwin':'macOS', 'linux':'SecretService'}
+            importlib.import_module('keyring.backends.'+keyrings[sys.platform])
         from remote import tls_context
         tls_context('0'*32,True)
         from importlib.metadata import version

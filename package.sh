@@ -156,7 +156,7 @@ package_backend() {
     python=$(build_python portable)
     freeze_helper "$python" DeviceLocation com.virtuallocation.device-location \
         --recursive-copy-metadata pymobiledevice3 --collect-data pymobiledevice3 --collect-data developer_disk_image \
-        --collect-submodules pytcp --exclude-module IPython --exclude-module pytest "$src/portable_location.py"
+        --collect-submodules pmd_pytcp --exclude-module IPython --exclude-module pytest "$src/portable_location.py"
     ditto "$work/dist/DeviceLocation.app" "$dest"
     local plist="$dest/Contents/Info.plist"
     /usr/libexec/PlistBuddy -c 'Add :LSBackgroundOnly bool true' "$plist"

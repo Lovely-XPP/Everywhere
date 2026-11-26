@@ -11,7 +11,7 @@ import sys
 import tempfile
 import zipfile
 
-from qt.android_toolchain import require_packages, sdkmanager, select
+from qt.android_toolchain import available_apis, require_packages, sdkmanager, select
 
 ROOT = Path(__file__).resolve().parent
 QT = ROOT / "qt"
@@ -45,12 +45,15 @@ def stage_sdk(destination, sdk, api, platform, tools_dir):
             (destination / entry.name).symlink_to(entry)
     for relative, source in ((f"platforms/android-{api}", platform),
                              (f"build-tools/{tools_dir.name}", tools_dir),
-                             ("tools/bin/sdkmanager", manager.resolve())):
+                             ("tools/bin/sdkmanager", manager.resolve()),
+                             ("tools/bin/avdmanager", manager.with_name("avdmanager").resolve())):
         link = destination / relative
         link.parent.mkdir(parents=True, exist_ok=True)
         link.symlink_to(source)
     subprocess.run([destination / "tools/bin/sdkmanager", f"--sdk_root={destination}", "--version"],
                    check=True)
+    if int(api) not in available_apis(destination):
+        raise SystemExit(f"临时 SDK 中 avdmanager 未列出选定的 API {api}：{platform}")
 
 
 def build(args):

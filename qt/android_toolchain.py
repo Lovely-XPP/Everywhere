@@ -41,6 +41,17 @@ def sdkmanager(sdk):
     return None
 
 
+def available_apis(sdk):
+    """按 python-for-android 的 list target 格式读取该 SDK 可用于构建的 API。"""
+    manager = sdkmanager(sdk)
+    if not manager or not executable(manager.with_name("avdmanager")):
+        raise SystemExit(f"Android SDK 缺少 avdmanager，请安装完整的 Command-line Tools：{sdk}")
+    env = dict(os.environ, ANDROID_HOME=str(sdk), ANDROID_SDK_ROOT=str(sdk))
+    targets = subprocess.check_output([manager.with_name("avdmanager"), "list", "target"],
+                                      env=env, text=True)
+    return {int(value) for value in re.findall(r"^ *API level: ([0-9]+)", targets, re.M)}
+
+
 def ndk_revision(path):
     """从安装元数据读取 NDK 版本，同时检查原生构建工具是否存在。"""
     properties = path / "source.properties"
@@ -71,7 +82,12 @@ def select(sdk, ndk_override=None):
     requested = os.getenv("EVERYWHERE_ANDROID_API")
     if requested and (not re.fullmatch(r"[1-9][0-9]*", requested) or int(requested) < MIN_TARGET_API):
         raise SystemExit(f"需要 API {MIN_TARGET_API} 或更新的整级平台：{requested}")
-    api = int(requested) if requested else max(platforms, default=MIN_TARGET_API)
+    visible = available_apis(sdk)
+    usable = platforms.keys() & visible
+    api = int(requested) if requested else max(usable, default=MIN_TARGET_API)
+    if api in platforms and api not in visible:
+        raise SystemExit(f"平台 {platforms[api].name} 已安装，但 avdmanager 未列出 API {api}。"
+                         f"请更新 Command-line Tools 或选择可见的稳定平台。可见 API：{sorted(visible)}")
     platform = platforms.get(api, sdk / f"platforms/android-{api}")
     if api not in platforms:
         missing.append(f"platforms;android-{api}")

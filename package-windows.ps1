@@ -63,12 +63,20 @@ try {
         }
     }
     $py="$venv/Scripts/python.exe"
-    Run $py @('-c','import sys,ssl; assert sys.version_info[:2] == (3,13) and sys.maxsize > 2**32 and ssl.HAS_PSK')
+    Run $py @('-c',"import sys, ssl, sysconfig; assert sys.version_info[:2] == (3,13) and sysconfig.get_platform() == 'win-amd64' and ssl.HAS_PSK, 'CPython 3.13 for Windows x64 with TLS-PSK is required'")
     Run $py @('-m','pip','install','-r',"$modern/requirements.txt",'-r',"$qt/requirements.txt")
     Run $py @('-m','pip','check')
     $stage = Join-Path $temp 'dist'
     $common = @('-m','PyInstaller','--noconfirm','--clean','--noupx','--distpath',$stage,'--workpath',"$temp/work",'--specpath',$temp,'--paths',$modern,'--paths',"$accessory/src",'--exclude-module','pytest','--exclude-module','IPython')
-    $deviceDependencies = @('--recursive-copy-metadata','pymobiledevice3','--collect-data','pymobiledevice3','--collect-data','developer_disk_image','--collect-submodules','pytcp')
+    $deviceDependencies = @('--recursive-copy-metadata','pymobiledevice3','--collect-data','pymobiledevice3','--collect-data','developer_disk_image','--collect-submodules','pmd_pytcp')
+    # pytun_pmd3 loads Wintun relative to its module, using the Python interpreter's architecture.
+    $sitePackages = Join-Path $venv 'Lib/site-packages'
+    $wintunDir = 'pytun_pmd3/wintun'
+    $wintunBin = "$wintunDir/bin/amd64"
+    $deviceDependencies += @(
+        '--add-binary', "${sitePackages}/${wintunBin}/wintun.dll:${wintunBin}",
+        '--add-data', "${sitePackages}/${wintunDir}/LICENSE.txt:${wintunDir}"
+    )
     $appVersion = (& $py "$qt/app_version.py").Trim()
     if ($LASTEXITCODE -ne 0 -or $appVersion -notmatch '^\d+\.\d+\.\d+$') {throw 'Invalid Qt application version'}
     $versionTuple = $appVersion.Replace('.', ',') + ',0'
@@ -79,8 +87,11 @@ VSVersionInfo(ffi=FixedFileInfo(filevers=($versionTuple),prodvers=($versionTuple
         VarFileInfo([VarStruct('Translation',[1033,1200])])])
 "@ | Set-Content -LiteralPath $versionFile -Encoding ASCII
     Run $py ($common + $deviceDependencies + @('--name','Everywhere','--version-file',$versionFile,'--windowed','--onedir','--hidden-import','portable_location','--collect-submodules','bleak.backends.winrt','--copy-metadata','keyring','--hidden-import','keyring.backends.Windows',"$qt/windows_entry.py"))
-    Run $py ($common + @('--name','EverywhereWorker','--console','--onefile',"$qt/worker.py"))
     $dest = "$stage/Everywhere"
+    if (!(Test-Path -LiteralPath "$dest/_internal/$wintunBin/wintun.dll" -PathType Leaf)) {
+        throw "Packaged Qt app is missing $wintunBin/wintun.dll"
+    }
+    Run $py ($common + @('--name','EverywhereWorker','--console','--onefile',"$qt/worker.py"))
     Copy-Item "$stage/EverywhereWorker.exe" $dest
     Run 'cl.exe' @('/nologo','/std:c++17','/EHsc','/O2','/MT','/utf-8',"/Fo$temp/rfcomm.obj","/Fe$dest/rfcomm.exe","$qt/native/rfcomm.cpp",'ws2_32.lib','Bthprops.lib')
     Run 'cl.exe' @('/nologo','/std:c++20','/EHsc','/O2','/MT','/utf-8',"/Fo$temp/gatt.obj","/Fe$dest/EverywhereGatt.exe","$qt/native/gatt.cpp",'windowsapp.lib')

@@ -91,7 +91,7 @@ def build(args, scratch, python):
     run(python,'-m','PyInstaller','--noconfirm','--noupx','--onedir','--name',APP,'--distpath',stage,
         '--workpath',scratch/'work','--specpath',scratch,'--paths',MODERN,'--paths',IAP2/'src',
         '--recursive-copy-metadata','pymobiledevice3','--collect-data','pymobiledevice3','--collect-data','developer_disk_image',
-        '--collect-submodules','pytcp','--copy-metadata','keyring','--exclude-module','pytest',
+        '--collect-submodules','pmd_pytcp','--copy-metadata','keyring','--exclude-module','pytest',
         '--exclude-module','IPython',*options,SRC/'app.py')
     product=stage/(APP+'.app' if MAC else APP)
     bin_dir=product/'Contents/MacOS' if MAC else product
