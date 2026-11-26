@@ -67,7 +67,11 @@ Android 分发构建使用 Qt for Python 6.8.3 和 JDK 17。脚本从 `avdmanage
 ./setup-android.sh --release
 ```
 
-脚本在 `Build/AndroidEnv/` 复用或创建 Python 虚拟环境，准备 SDK、NDK、Gradle 缓存及官方 arm64 wheels。首次构建需要联网；SDK 许可按安装程序提示处理。可通过 `JAVA_HOME` 选择 JDK 17，通过 `ANDROID_HOST_PYTHON` 选择 Python 3.10/3.11，通过 `ANDROID_SDK_ROOT` 或 `ANDROID_HOME` 指定 SDK。未指定时，脚本查找项目和 Android Studio 的默认 SDK 目录。仅运行 `./setup-android.sh` 可单独准备环境。
+脚本在 `Build/AndroidEnv/` 复用或创建 Python 虚拟环境，准备 SDK、NDK、Gradle 缓存及官方 arm64 wheels。宿主 Python 依赖优先使用已安装版本和 `host-wheels/` 本地包缓存，仅缺少依赖时联网下载；官方 Android wheels 保存在 `wheels/`，打包时首次下载的 python-for-android 源码保存在 `downloads/` 并在后续构建中复用。首次构建需要联网；SDK 许可按安装程序提示处理。可通过 `JAVA_HOME` 选择 JDK 17，通过 `ANDROID_HOST_PYTHON` 选择 Python 3.10/3.11，通过 `ANDROID_SDK_ROOT` 或 `ANDROID_HOME` 指定 SDK。未指定时，脚本查找项目和 Android Studio 的默认 SDK 目录。仅运行 `./setup-android.sh` 可单独准备环境。
+
+python-for-android 下载的 CPython、OpenSSL、SQLite 等 recipe 源码包及下载完成标记保存在 `Build/AndroidEnv/packages/`，即使构建失败也会保留已成功下载的文件。默认将原生编译产物及 Android distribution 保存到 `Build/AndroidEnv/build/<缓存键>/`；如果项目路径包含中文、其他非 ASCII 字符或空白，则使用用户缓存目录（macOS 为 `~/Library/Caches/Everywhere/android/`，Linux 为 `$XDG_CACHE_HOME/everywhere/android/` 或 `~/.cache/everywhere/android/`），按项目和工具链隔离。也可通过 `EVERYWHERE_ANDROID_BUILD_CACHE` 指定纯 ASCII、无空白的缓存根目录。工具链、依赖内容或构建配置变化时自动使用新的缓存目录；修改业务 Python 代码后仍会重新组装 APK 并执行签名检查。缓存仅供本机使用，不应上传或共享完整目录（其中可能包含应用打包资源）。需要强制重新编译时运行 `./setup-android.sh --release --clean`，保留已下载的依赖。macOS 需要通过 `brew install make` 安装新版 GNU Make，打包脚本自动选用 `gmake`，避免系统自带 Make 3.81 与新版 Automake 不兼容。
+
+原生编译规则使用独立的 `NATIVE_BUILD_REVISION` 缓存版本；仅修改业务代码、资源、APK 组装或签名配置不会改变原生编译缓存键。Cargo 下载缓存默认位于 `Build/AndroidEnv/cargo/`，可通过 `EVERYWHERE_ANDROID_CARGO_CACHE` 单独指定。
 
 发布包默认使用本机 `asset/android-signing/release.p12`（别名 `everywhere`）和同目录的 `password` 文件。迁移构建机时应安全备份并复用发布身份。也可使用 `EVERYWHERE_ANDROID_KEYSTORE`、`EVERYWHERE_ANDROID_KEY_ALIAS` 和 `EVERYWHERE_ANDROID_PASSWORD_FILE` 指定现有身份。它们用于 Android 安装包签名。用于 iPhone 配件认证的 `asset/mfi/` 身份会随包分发；持有 APK 的人可以提取配件私钥。
 

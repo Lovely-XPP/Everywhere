@@ -2,6 +2,9 @@
 
 新增功能
 
+- Android 控制台增加统一品牌标题、连接状态、卡片式地图和固定底部操作区，横屏采用桌面式左右布局，优化触控按钮、输入框及长地名显示。
+- Android 控制台采用与桌面一致的主题、地点和设备分区，支持直接输入 WGS 84 经纬度、地图草稿预览、地点搜索及本地收藏，并适配小屏幕滚动。
+- Android 控制台启动时优先自动获取系统提供的本机蓝牙地址，新增「自动获取」按钮；系统未提供地址时保留手动填写。
 - Windows x64 和 Linux x64 现在各提供一个可执行文件，内置 Qt 和辅助程序，可从 GitHub Actions 或 Release 直接下载运行。
 - 可在 GitHub Actions 手动打包，或通过 Release 一次发布 Swift 版 macOS Intel、Apple Silicon、Qt 版 Linux、Windows x64 安装包和 Android arm64 签名 APK。版本号与发布说明自动从代码和 CHANGELOG 读取，五种构建均内置 v0.1.0 Release 的 MFi 配件身份。
 - 新增 Android Qt 配件定位前台原型和 Qt 6.8.3 arm64 APK 发布签名构建入口（目标 Android 9.0 起，无需 root），支持选择已配对的 iPhone、认证后发送地图选点和结束会话。真机兼容性待验证。
@@ -13,6 +16,12 @@
 
 修复bug
 
+- Android 打包脚本、界面或安装配置调整后复用原有原生编译缓存，仅工具链、原生依赖或不兼容的原生构建规则变化时重新编译。
+- Android 本地发布构建统一使用 Rustup 工具链并预检 ARM64 Android 标准库，Cargo 下载缓存按项目复用，避免 Rust 交叉编译工具链不匹配。
+- 修复 Android APK 启动时缺少 Qt Bluetooth Java 类导致闪退的问题；打包时补齐 JAR 依赖并检查 DEX 类定义。
+- Android 本地打包优先复用已安装的 Python 宿主依赖、本地 wheel 缓存、python-for-android 源码、recipe 下载包及原生编译产物，避免构建失败或修改业务代码后重复下载和编译；支持 --clean 强制重新编译。
+- Android 项目路径包含中文或空白时自动选择纯 ASCII 的持久编译缓存目录，修复 SQLite 等原生依赖配置阶段的路径编码错误。
+- macOS 本地 Android 打包使用新版 GNU Make，修复 libffi 配置阶段无法生成依赖跟踪 Makefile 的错误。
 - Android APK 使用项目的 PNG 应用图标，修复发布构建在 `mergeReleaseResources` 编译图标时失败的问题。
 - Android APK 的 CI 构建通过 Google Cloud 镜像获取 Maven Central 依赖，修复 Gradle 下载依赖遇到 HTTP 429 后中断发布打包的问题。
 - Android 本地及 CI 打包自动选择已安装的 SDK 平台、Build Tools 和兼容 NDK，仅选择 Android 工具实际识别的目标 API，避免 runner 把不可用的平台交给编译器。

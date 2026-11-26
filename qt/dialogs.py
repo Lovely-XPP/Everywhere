@@ -1,5 +1,6 @@
 """Application-modal windows shared by the Qt desktop console."""
 from PySide6 import QtCore as C, QtWidgets as W
+import sys
 
 from appearance import Dropdown, Symbol, label
 
@@ -42,6 +43,10 @@ class ModalDialog(W.QDialog):
         self.setObjectName('consoleDialog')
         self.setMinimumWidth(390)
         self.resize(440,200)
+        if sys.platform == 'android':
+            width = max(240, parent.window().width() - 24)
+            self.setMinimumWidth(min(390, width))
+            self.resize(min(440, width), 200)
         self.shell=W.QVBoxLayout(self)
         self.shell.setContentsMargins(20,20,20,18)
         self.shell.setSpacing(16)

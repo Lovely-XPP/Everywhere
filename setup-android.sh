@@ -5,9 +5,14 @@ umask 077
 root=$(cd "$(dirname "$0")" && pwd)
 cd "$root"
 mode=${1:-}
-case "$mode" in ""|--release) ;; *) echo "用法：./setup-android.sh [--release]" >&2; exit 2;; esac
+clean_args=()
+case "$mode:$#" in
+    :0|--release:1) ;;
+    --release:2) if [[ $2 == --clean ]]; then clean_args=(--clean); else echo "用法：./setup-android.sh [--release [--clean]]" >&2; exit 2; fi ;;
+    *) echo "用法：./setup-android.sh [--release [--clean]]" >&2; exit 2;;
+esac
 tools_dir="$root/Build/AndroidEnv"
-mkdir -p "$tools_dir"/{wheels,downloads,gradle}
+mkdir -p "$tools_dir"/{wheels,host-wheels,downloads,gradle}
 if [[ -z ${ANDROID_SDK_ROOT:-} && -z ${ANDROID_HOME:-} ]]; then
     for candidate in "$tools_dir/sdk" "$HOME/Library/Android/sdk" "$HOME/Android/Sdk"; do
         if [[ -d "$candidate/platforms" || -d "$candidate/cmdline-tools" ]]; then
@@ -35,6 +40,29 @@ if [[ ! -x "$tools_dir/venv/bin/python" ]]; then
 fi
 export VIRTUAL_ENV="$tools_dir/venv"
 export PATH="$VIRTUAL_ENV/bin:$JAVA_HOME/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
+# 使用同一个 Rustup toolchain 的 cargo/rustc，避免交叉目标与宿主编译器不匹配。
+# Cargo 下载缓存独立于全局工具链，重复打包时复用。
+if [[ "$mode" == --release ]]; then
+    if ! command -v rustup >/dev/null; then
+        echo "需要 Rustup 和 Android ARM64 Rust 工具链。" >&2; exit 1
+    fi
+    rustc_path=$(rustup which rustc)
+    cargo_path=$(rustup which cargo)
+    export PATH="$(dirname "$rustc_path"):$PATH"
+    export RUSTC="$rustc_path"
+    export CARGO="$cargo_path"
+    rust_target=aarch64-linux-android
+    if ! rustup target list --installed | grep -Fxq "$rust_target"; then
+        rustup target add "$rust_target"
+    fi
+    export CARGO_HOME="${EVERYWHERE_ANDROID_CARGO_CACHE:-$tools_dir/cargo}"
+    mkdir -p "$CARGO_HOME"
+    rust_target_libs=$("$RUSTC" --print target-libdir --target "$rust_target")
+    if ! compgen -G "$rust_target_libs/libcore-*.rlib" >/dev/null || ! compgen -G "$rust_target_libs/libstd-*.rlib" >/dev/null; then
+        echo "Rust Android ARM64 标准库不完整：$rust_target_libs" >&2; exit 1
+    fi
+    echo "Rust 工具链：$("$RUSTC" --version)；Cargo 缓存：$CARGO_HOME"
+fi
 download() {
     local url=$1 output=$2 temp
     if [[ ! -s "$output" ]]; then
@@ -60,7 +88,13 @@ if [[ ! -x "$manager" ]]; then
     mv "$tmpdir/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools/latest"
 fi
 "$VIRTUAL_ENV/bin/python" qt/android_toolchain.py "$ANDROID_SDK_ROOT"
-"$VIRTUAL_ENV/bin/python" -m pip install "PySide6==6.8.3" "buildozer==1.5.0" "Cython<3" setuptools wheel
+# 优先使用已安装依赖和本地 wheel 库；缺少依赖时先下载，再从本地安装。
+# 显式准备 Qt Android 部署工具的辅助依赖，避免其启动时重复联网。
+host_requirements=("PySide6==6.8.3" "buildozer==1.5.0" "Cython<3" setuptools wheel jinja2 pkginfo tqdm)
+if ! "$VIRTUAL_ENV/bin/python" -m pip install --no-index --find-links "$tools_dir/host-wheels" "${host_requirements[@]}"; then
+    "$VIRTUAL_ENV/bin/python" -m pip download --dest "$tools_dir/host-wheels" --find-links "$tools_dir/host-wheels" "${host_requirements[@]}"
+    "$VIRTUAL_ENV/bin/python" -m pip install --no-index --find-links "$tools_dir/host-wheels" "${host_requirements[@]}"
+fi
 wheel_suffix="6.8.3-6.8.3-cp311-cp311-android_aarch64.whl"
 for module in PySide6 shiboken6; do
     folder=$(echo "$module" | tr '[:upper:]' '[:lower:]')
@@ -70,5 +104,5 @@ for module in PySide6 shiboken6; do
 done
 if [[ "$mode" == --release ]]; then
     "$VIRTUAL_ENV/bin/python" package-android.py --release --sdk "$ANDROID_SDK_ROOT" \
-        --pyside "$tools_dir/wheels/PySide6-$wheel_suffix" --shiboken "$tools_dir/wheels/shiboken6-$wheel_suffix"
+        --pyside "$tools_dir/wheels/PySide6-$wheel_suffix" --shiboken "$tools_dir/wheels/shiboken6-$wheel_suffix" ${clean_args[@]+"${clean_args[@]}"}
 fi
