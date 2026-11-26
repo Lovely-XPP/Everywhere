@@ -1,6 +1,6 @@
 <h1 align="center">
   <img src="swift/Host/MacApp/VirtualLocation.png" width="112" height="112" alt="Everywhere 应用图标"><br>
-  Everywhere 0.2.0
+  Everywhere 0.2.1
 </h1>
 
 <p align="center">在 macOS、Windows 或 Linux 桌面地图上选点，模拟 iPhone 和 iPad 的位置。</p>

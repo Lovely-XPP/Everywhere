@@ -1,6 +1,6 @@
 <h1 align="center">
   <img src="swift/Host/MacApp/VirtualLocation.png" width="112" height="112" alt="Everywhere app icon"><br>
-  Everywhere 0.2.0
+  Everywhere 0.2.1
 </h1>
 
 <p align="center">Pick a point on your macOS, Windows, or Linux desktop to simulate an iPhone or iPad’s location.</p>
