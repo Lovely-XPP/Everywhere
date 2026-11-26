@@ -12,6 +12,26 @@ function Run([string]$program, [string[]]$arguments) {
     & $program @arguments
     if ($LASTEXITCODE -ne 0) { throw "$program exited with $LASTEXITCODE" }
 }
+# 自检只传固定开关和仓库相对路径。单独指定工作目录，支持仓库路径含空格。
+function Invoke-PackageCheck([string]$name, [string]$program, [string[]]$arguments, [int]$seconds = 90) {
+    Write-Host "[check] $name (timeout: ${seconds}s)"
+    $start = New-Object System.Diagnostics.ProcessStartInfo
+    $start.FileName = $program
+    $start.Arguments = $arguments -join ' '
+    $start.WorkingDirectory = $root
+    $start.UseShellExecute = $false
+    $process = [System.Diagnostics.Process]::Start($start)
+    try {
+        if (!$process.WaitForExit($seconds * 1000)) {
+            & taskkill.exe /PID $process.Id /T /F
+            throw "$name timed out after ${seconds}s"
+        }
+        if ($process.ExitCode -ne 0) { throw "$name failed (exit $($process.ExitCode))" }
+        Write-Host "[pass] $name"
+    } finally {
+        $process.Dispose()
+    }
+}
 $identityFiles = @()
 if ($bundleIdentity) {
     $identityFiles += 'certificate.p7b'
@@ -58,7 +78,7 @@ VSVersionInfo(ffi=FixedFileInfo(filevers=($versionTuple),prodvers=($versionTuple
   kids=[StringFileInfo([StringTable('040904b0',[StringStruct('ProductName','Everywhere'),StringStruct('FileVersion','$appVersion'),StringStruct('ProductVersion','$appVersion')])]),
         VarFileInfo([VarStruct('Translation',[1033,1200])])])
 "@ | Set-Content -LiteralPath $versionFile -Encoding ASCII
-    Run $py ($common + $deviceDependencies + @('--name','Everywhere','--version-file',$versionFile,'--windowed','--onedir','--hidden-import','portable_location','--collect-submodules','bleak.backends.winrt','--copy-metadata','keyring','--hidden-import','keyring.backends.Windows',"$qt/app.py"))
+    Run $py ($common + $deviceDependencies + @('--name','Everywhere','--version-file',$versionFile,'--windowed','--onedir','--hidden-import','portable_location','--collect-submodules','bleak.backends.winrt','--copy-metadata','keyring','--hidden-import','keyring.backends.Windows',"$qt/windows_entry.py"))
     Run $py ($common + @('--name','EverywhereWorker','--console','--onefile',"$qt/worker.py"))
     $dest = "$stage/Everywhere"
     Copy-Item "$stage/EverywhereWorker.exe" $dest
@@ -74,16 +94,26 @@ VSVersionInfo(ffi=FixedFileInfo(filevers=($versionTuple),prodvers=($versionTuple
     Copy-Item "$root/package-windows.ps1" $src
     Copy-Item $modern "$src/swift/Host/ModernBackend" -Recurse
     Get-ChildItem $src -Directory -Recurse -Filter '__pycache__' | Remove-Item -Recurse -Force
-    Run "$dest/rfcomm.exe" @('--self-test')
-    Run "$dest/EverywhereGatt.exe" @('--self-test')
-    Run "$dest/EverywhereWorker.exe" @('--self-test')
-    Run "$dest/EverywhereWorker.exe" @('connect','--help')
-    if ($identityFiles -contains 'identity.pk8') {Run "$dest/EverywhereWorker.exe" @('--verify-bundle')}
-    $smoke = Start-Process -Wait -PassThru -FilePath "$dest/Everywhere.exe" -ArgumentList '--smoke-test'
-    if ($smoke.ExitCode -ne 0) {throw 'Packaged Qt startup or dependency check failed'}
-    Run $py @('-m','unittest','discover','-s',"$qt/tests",'-p','test_*.py')
+    Invoke-PackageCheck 'RFCOMM helper' "$dest/rfcomm.exe" @('--self-test')
+    Invoke-PackageCheck 'GATT helper' "$dest/EverywhereGatt.exe" @('--self-test')
+    Invoke-PackageCheck 'iAP2 worker' "$dest/EverywhereWorker.exe" @('--self-test')
+    Invoke-PackageCheck 'Worker connect CLI' "$dest/EverywhereWorker.exe" @('connect','--help')
+    if ($identityFiles -contains 'identity.pk8') {
+        Invoke-PackageCheck 'Bundled identity' "$dest/EverywhereWorker.exe" @('--verify-bundle')
+    }
+    $previousSmokeLog = $env:EVERYWHERE_SMOKE_LOG
+    $smokeLog = Join-Path $temp 'qt-smoke.log'
+    try {
+        $env:EVERYWHERE_SMOKE_LOG = $smokeLog
+        Invoke-PackageCheck 'Packaged Qt startup and shutdown' "$dest/Everywhere.exe" @('--smoke-test')
+    } finally {
+        $env:EVERYWHERE_SMOKE_LOG = $previousSmokeLog
+        if (Test-Path -LiteralPath $smokeLog) { Get-Content -LiteralPath $smokeLog -Encoding UTF8 }
+    }
+    Invoke-PackageCheck 'Qt unit tests' $py @('-u','-m','unittest','discover','-v','-s','qt/tests','-p','test_*.py') 300
     $archive = "Everywhere-Windows-x64-$appVersion-"+(Get-Date -Format 'yyyyMMdd-HHmmss')+'-'+[guid]::NewGuid().ToString('N').Substring(0,6)+'.zip'
     # tar includes hidden Qt files and does not impose Compress-Archive's individual file size limit.
+    Write-Host "[archive] $archive"
     Run 'tar.exe' @('-a','-cf',"$temp/$archive",'-C',$stage,'Everywhere')
     Move-Item -LiteralPath "$temp/$archive" -Destination (Join-Path $OutputDirectory $archive)
     # Keep the verified native helpers available when launching qt/app.py from source.

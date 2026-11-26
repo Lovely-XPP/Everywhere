@@ -12,7 +12,10 @@
 
 修复bug
 
-- 修复 Android APK 打包时 Buildozer 1.5.0 因屏幕方向配置无效而中断的问题，保留横屏、竖屏及其反向旋转。
+- Android 本地打包可分别指定目标 API 和 Build Tools 版本，复用已有 SDK。
+- Windows 安装包的 CI 自检会显示当前检查项和失败原因。Qt 启动或退出异常时会输出诊断日志，超时后终止检查。
+- 修复 Intel Mac 安装包中定位辅助程序因 OpenSSL 库缺少符号而无法启动、导致 CI 自检失败的问题。
+- 修复 Android APK 打包时 Buildozer 1.5.0 因找不到新版 SDK 的 `sdkmanager` 或屏幕方向配置无效而中断的问题，保留横屏、竖屏及其反向旋转。
 - 修复 Swift 版 macOS 安装包成功导出后，CI 因 `lipo` 架构检查的参数顺序错误而中断上传的问题。
 - 修复 Swift 版 macOS 控制台在 CI 构建时因蓝牙连接方式标签的类型推断超时而无法生成安装包的问题。
 - 修复 Intel Mac 构建遥控模块时 TLS 密码套件标识类型不匹配的问题。

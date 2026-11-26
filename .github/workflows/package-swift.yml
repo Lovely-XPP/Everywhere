@@ -32,6 +32,31 @@ jobs:
         with:
           python-version: '3.13'
           architecture: ${{ matrix.arch }}
+      - name: Build Intel cryptography with static OpenSSL
+        if: matrix.arch == 'x64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          prefix=$(brew --prefix openssl@3)
+          if [[ ! -f "$prefix/lib/libssl.a" || ! -f "$prefix/lib/libcrypto.a" ]]; then
+            brew install openssl@3
+          fi
+          python -m venv "$RUNNER_TEMP/portable-x64"
+          py="$RUNNER_TEMP/portable-x64/bin/python"
+          OPENSSL_DIR="$prefix" OPENSSL_STATIC=1 "$py" -m pip install \
+            --no-cache-dir --no-binary=cryptography 'PyInstaller>=6,<7' \
+            -r swift/Host/ModernBackend/requirements.txt
+
+          # PyInstaller 会把同名 dylib 收集到同一个目录。确保 Rust 扩展无需加载 Python 自带的 OpenSSL。
+          binding=$("$py" -c 'from cryptography.hazmat.bindings import _rust; print(_rust.__file__)')
+          xcrun lipo "$binding" -verify_arch x86_64
+          links=$(xcrun otool -L "$binding")
+          if grep -Eq '^[[:space:]]*([^[:space:]]*/)?lib(ssl|crypto)(\.[0-9]+)*\.dylib[[:space:]]' <<< "$links"; then
+            echo "::error::Intel cryptography still links to a shared OpenSSL library"
+            printf '%s\n' "$links"
+            exit 1
+          fi
+          echo "EVERYWHERE_PORTABLE_PYTHON=$py" >> "$GITHUB_ENV"
       - uses: ./.github/actions/prepare-mfi
       - name: Package Swift MacHost and verify its architecture
         env:

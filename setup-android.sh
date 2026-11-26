@@ -10,6 +10,8 @@ tools_dir="$root/Build/AndroidEnv"
 mkdir -p "$tools_dir"/{wheels,downloads,gradle}
 export ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-"$tools_dir/sdk"}
 export ANDROID_HOME="$ANDROID_SDK_ROOT"
+export EVERYWHERE_ANDROID_API=${EVERYWHERE_ANDROID_API:-34}
+export EVERYWHERE_ANDROID_BUILD_TOOLS=${EVERYWHERE_ANDROID_BUILD_TOOLS:-35.0.0}
 export ANDROID_NDK_ROOT=${ANDROID_NDK_ROOT:-"$ANDROID_SDK_ROOT/ndk/26.1.10909125"}
 export GRADLE_USER_HOME="$tools_dir/gradle"
 export PIP_CACHE_DIR="$tools_dir/pip-cache"
@@ -52,7 +54,8 @@ if [[ ! -x "$manager" ]]; then
     mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
     mv "$tmpdir/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools/latest"
 fi
-"$manager" --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-34" "build-tools;35.0.0" "ndk;26.1.10909125"
+"$manager" --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-$EVERYWHERE_ANDROID_API" \
+    "build-tools;$EVERYWHERE_ANDROID_BUILD_TOOLS" "ndk;26.1.10909125"
 "$VIRTUAL_ENV/bin/python" -m pip install "PySide6==6.8.3" "buildozer==1.5.0" "Cython<3" setuptools wheel
 wheel_suffix="6.8.3-6.8.3-cp311-cp311-android_aarch64.whl"
 for module in PySide6 shiboken6; do

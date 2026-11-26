@@ -32,6 +32,26 @@ def stage(directory):
         shutil.copy2(ROOT / "asset/mfi" / name, directory / "mfi" / name)
 
 
+def prepare_sdkmanager(sdk):
+    """让 Buildozer 1.5.0 能从旧入口调用已安装的 SDK 工具，并检查该入口可执行。"""
+    legacy = sdk / "tools/bin/sdkmanager"
+    if not legacy.is_file():
+        manager = sdk / "cmdline-tools/latest/bin/sdkmanager"
+        if not manager.is_file() or not os.access(manager, os.X_OK):
+            raise SystemExit(f"缺少可执行的 Android SDK Command-line Tools：{manager}")
+        try:
+            legacy.parent.mkdir(parents=True, exist_ok=True)
+            legacy.symlink_to(os.path.relpath(manager, legacy.parent))
+        except FileExistsError:
+            if not legacy.is_file():
+                raise SystemExit(f"SDK 兼容路径已被占用：{legacy}")
+        except OSError as error:
+            raise SystemExit(f"无法在 SDK 中创建 Buildozer 兼容入口 {legacy}：{error}")
+    if not os.access(legacy, os.X_OK):
+        raise SystemExit(f"Android SDK 工具不可执行：{legacy}")
+    subprocess.run([legacy, f"--sdk_root={sdk}", "--version"], check=True)
+
+
 def build(args):
     from importlib.metadata import version
     deploy = shutil.which("pyside6-android-deploy")
@@ -47,9 +67,15 @@ def build(args):
         raise SystemExit("Android 构建使用 Qt for Python 6.8.3。")
     minimum = 28
     mode = "release" if args.release else "debug"
-    tools_dir = args.sdk.resolve() / "build-tools/35.0.0"
+    sdk = args.sdk.resolve()
+    android_api = os.environ.get("EVERYWHERE_ANDROID_API", "34")
+    build_tools = os.environ.get("EVERYWHERE_ANDROID_BUILD_TOOLS", "35.0.0")
+    if not (sdk / "platforms" / f"android-{android_api}" / "android.jar").is_file():
+        raise SystemExit(f"缺少 Android SDK Platform {android_api}：{sdk}")
+    tools_dir = sdk / "build-tools" / build_tools
     if not (tools_dir / "aapt").is_file():
-        raise SystemExit("缺少 Android SDK Build Tools 35.0.0。")
+        raise SystemExit(f"缺少 Android SDK Build Tools {build_tools}：{sdk}")
+    prepare_sdkmanager(sdk)
 
     if args.release:
         signing = ROOT / "asset/android-signing"
@@ -88,7 +114,7 @@ def build(args):
                     "android.permission.BLUETOOTH_CONNECT,"
                     "(name=android.permission.BLUETOOTH_SCAN;usesPermissionFlags=neverForLocation)",
                     "android.debug_artifact": "apk"})
-        app["android.api"] = "34"
+        app["android.api"] = android_api
         app["android.release_artifact"] = "apk"
         # 官方 Android wheels 的解释器 ABI 是 cp311。
         requirements = [r.strip() for r in app["requirements"].split(",")

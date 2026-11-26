@@ -56,8 +56,9 @@ class Jobs(C.QObject):
 
 
 class Desk(W.QMainWindow):
-    def __init__(self):
+    def __init__(self, *, smoke_test=False):
         super().__init__()
+        self.smoke_test=smoke_test
         self.setWindowTitle('Everywhere')
         self.resize(1120,720)
         self.settings=C.QSettings()
@@ -585,6 +586,11 @@ class Desk(W.QMainWindow):
                 if s.active or s.unknown: await s.execute(None)
         def done(_,error):
             self.closing=False
+            if error and self.smoke_test:
+                print(f'Qt shutdown failed: {error}',file=sys.stderr,flush=True)
+                self.jobs.loop.call_soon_threadsafe(self.jobs.loop.stop)
+                W.QApplication.exit(1)
+                return
             if error and not confirm(self,'恢复结果未知','无法确认设备恢复。仍退出 Everywhere？','退出 Everywhere',
                                      cancel='留在应用',destructive=True):
                 self.timer.start()
@@ -682,7 +688,6 @@ def main():
     app.setApplicationName('Everywhere')
     app.setApplicationVersion(VERSION)
     app.setOrganizationName('Everywhere')
-    job=None
     if sys.platform=='win32':
         # 进程被任务管理器终止时，让操作系统一并回收随宿主创建的蓝牙子进程。
         import win32api,win32job
@@ -693,10 +698,13 @@ def main():
             info['BasicLimitInformation']['LimitFlags'] |= win32job.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
             win32job.SetInformationJobObject(job,win32job.JobObjectExtendedLimitInformation,info)
             win32job.AssignProcessToJobObject(job,win32api.GetCurrentProcess())
+            # 仅在进程退出时关闭句柄，启动异常仍有机会写入诊断日志。
+            job.Detach()
         except pywintypes.error:
-            job=None
-    w=Desk()
+            pass
+    w=Desk(smoke_test=smoke)
     if smoke:
+        print('Checking device, Bluetooth, keyring and TLS dependencies',flush=True)
         import portable_location
         import importlib
         if sys.platform == 'win32':
@@ -713,25 +721,27 @@ def main():
         from inspect import signature
         assert version('pymobiledevice3') == portable_location.BACKEND_VERSION
         assert 'consumer' in signature(portable_location.session).parameters
+        print('Showing and closing the Qt window',flush=True)
         C.QTimer.singleShot(0,w.close)
     w.show()
-    result=app.exec()
-    if job is not None:
-        # Retain the last job handle until OS process teardown.
-        job.Detach()
-    return result
+    return app.exec()
 
 
-if __name__=='__main__':
+def dispatch():
+    """按命令行启动桌面或辅助进程，并返回退出状态。"""
     if sys.argv[1:2] == ['--qt-worker']:
         from worker import main as worker_main
         del sys.argv[1]
         worker_main()
     elif sys.argv[1:2] == ['--linux-rfcomm']:
         from linux_rfcomm import main as bridge_main
-        sys.exit(bridge_main(sys.argv[2:]))
+        return bridge_main(sys.argv[2:])
     elif sys.argv[1:2] == ['--linux-gatt']:
         from linux_gatt import main as gatt_main
         asyncio.run(gatt_main(sys.argv[2:]))
     else:
-        sys.exit(main())
+        return main()
+
+
+if __name__=='__main__':
+    sys.exit(dispatch())

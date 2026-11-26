@@ -59,7 +59,7 @@ macOS arm64 已构建 Qt 分发包，并验证解压后的代码签名、Qt 离�
 
 Android 手机运行前台 Qt 控制台，在系统蓝牙设置中配对 iPhone，返回控制台允许访问附近设备并刷新。在列表中选择目标手机；若本机地址留空，从 Android 系统的关于手机或状态页填写安卓本机的经典蓝牙地址。连接后等待配件识别和认证通过，在地图上选点并确认发送。结束会话会断开配件连接，请在 iPhone 的独立定位诊断中检查恢复结果。前台进程退出或蓝牙断开后重新连接需要重新选定发送操作。
 
-Android 分发构建固定使用 Qt for Python 6.8.3、Android SDK 34、Build Tools 35.0.0、NDK r26b、JDK 17。安装下限为 **Android 9.0（API 28）及 arm64-v8a**。Android 9–11 通过普通蓝牙权限读取系统已配对设备，Android 12 起会申请附近设备权限。两部手机均按系统正常配对操作，Android 端无需 root 或开启模拟位置权限。
+Android 分发构建使用 Qt for Python 6.8.3、NDK r26b、JDK 17，默认目标 API 34、Build Tools 35.0.0。要尝试以 API 36 打包，可在运行脚本时设置 `EVERYWHERE_ANDROID_API=36` 和 `EVERYWHERE_ANDROID_BUILD_TOOLS=36.0.0`。安装下限为 **Android 9.0（API 28）及 arm64-v8a**。Android 9–11 通过普通蓝牙权限读取系统已配对设备，Android 12 起会申请附近设备权限。两部手机均按系统正常配对操作，Android 端无需 root 或开启模拟位置权限。
 
 在 macOS 或 Linux 项目根目录运行：
 
