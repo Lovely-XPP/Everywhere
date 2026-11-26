@@ -8,11 +8,16 @@ mode=${1:-}
 case "$mode" in ""|--release) ;; *) echo "用法：./setup-android.sh [--release]" >&2; exit 2;; esac
 tools_dir="$root/Build/AndroidEnv"
 mkdir -p "$tools_dir"/{wheels,downloads,gradle}
-export ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-"$tools_dir/sdk"}
+if [[ -z ${ANDROID_SDK_ROOT:-} && -z ${ANDROID_HOME:-} ]]; then
+    for candidate in "$tools_dir/sdk" "$HOME/Library/Android/sdk" "$HOME/Android/Sdk"; do
+        if [[ -d "$candidate/platforms" || -d "$candidate/cmdline-tools" ]]; then
+            ANDROID_SDK_ROOT=$candidate
+            break
+        fi
+    done
+fi
+export ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-${ANDROID_HOME:-"$tools_dir/sdk"}}
 export ANDROID_HOME="$ANDROID_SDK_ROOT"
-export EVERYWHERE_ANDROID_API=${EVERYWHERE_ANDROID_API:-34}
-export EVERYWHERE_ANDROID_BUILD_TOOLS=${EVERYWHERE_ANDROID_BUILD_TOOLS:-35.0.0}
-export ANDROID_NDK_ROOT=${ANDROID_NDK_ROOT:-"$ANDROID_SDK_ROOT/ndk/26.1.10909125"}
 export GRADLE_USER_HOME="$tools_dir/gradle"
 export PIP_CACHE_DIR="$tools_dir/pip-cache"
 if [[ -x "$tools_dir/jdk/bin/javac" && -z ${JAVA_HOME:-} ]]; then
@@ -40,7 +45,7 @@ download() {
         mv "$temp" "$output"
     fi
 }
-manager="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+manager=$("$VIRTUAL_ENV/bin/python" qt/android_toolchain.py "$ANDROID_SDK_ROOT" --manager)
 if [[ ! -x "$manager" ]]; then
     case "$(uname -s)" in Darwin) platform=mac;; Linux) platform=linux;; *) echo "需要 macOS 或 Linux。"; exit 1;; esac
     archive="commandlinetools-${platform}-11076708_latest.zip"
@@ -54,8 +59,7 @@ if [[ ! -x "$manager" ]]; then
     mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
     mv "$tmpdir/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools/latest"
 fi
-"$manager" --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-$EVERYWHERE_ANDROID_API" \
-    "build-tools;$EVERYWHERE_ANDROID_BUILD_TOOLS" "ndk;26.1.10909125"
+"$VIRTUAL_ENV/bin/python" qt/android_toolchain.py "$ANDROID_SDK_ROOT"
 "$VIRTUAL_ENV/bin/python" -m pip install "PySide6==6.8.3" "buildozer==1.5.0" "Cython<3" setuptools wheel
 wheel_suffix="6.8.3-6.8.3-cp311-cp311-android_aarch64.whl"
 for module in PySide6 shiboken6; do
@@ -65,6 +69,6 @@ for module in PySide6 shiboken6; do
     "$VIRTUAL_ENV/bin/python" -m zipfile -t "$tools_dir/wheels/$wheel"
 done
 if [[ "$mode" == --release ]]; then
-    "$VIRTUAL_ENV/bin/python" package-android.py --release --sdk "$ANDROID_SDK_ROOT" --ndk "$ANDROID_NDK_ROOT" \
+    "$VIRTUAL_ENV/bin/python" package-android.py --release --sdk "$ANDROID_SDK_ROOT" \
         --pyside "$tools_dir/wheels/PySide6-$wheel_suffix" --shiboken "$tools_dir/wheels/shiboken6-$wheel_suffix"
 fi

@@ -59,7 +59,7 @@ macOS arm64 已构建 Qt 分发包，并验证解压后的代码签名、Qt 离�
 
 Android 手机运行前台 Qt 控制台，在系统蓝牙设置中配对 iPhone，返回控制台允许访问附近设备并刷新。在列表中选择目标手机；若本机地址留空，从 Android 系统的关于手机或状态页填写安卓本机的经典蓝牙地址。连接后等待配件识别和认证通过，在地图上选点并确认发送。结束会话会断开配件连接，请在 iPhone 的独立定位诊断中检查恢复结果。前台进程退出或蓝牙断开后重新连接需要重新选定发送操作。
 
-Android 分发构建使用 Qt for Python 6.8.3、NDK r26b、JDK 17，默认目标 API 34、Build Tools 35.0.0。要尝试以 API 36 打包，可在运行脚本时设置 `EVERYWHERE_ANDROID_API=36` 和 `EVERYWHERE_ANDROID_BUILD_TOOLS=36.0.0`。安装下限为 **Android 9.0（API 28）及 arm64-v8a**。Android 9–11 通过普通蓝牙权限读取系统已配对设备，Android 12 起会申请附近设备权限。两部手机均按系统正常配对操作，Android 端无需 root 或开启模拟位置权限。
+Android 分发构建使用 Qt for Python 6.8.3 和 JDK 17。脚本自动选择已安装的最高稳定整级平台（API 34 起）和完整的 Build Tools（35.0.0 起），并复用 NDK r27c 或 r26b。缺少合适组件时才请求安装。可用 `EVERYWHERE_ANDROID_API`、`EVERYWHERE_ANDROID_BUILD_TOOLS` 和 `ANDROID_NDK_ROOT` 显式选择版本。安装下限为 **Android 9.0（API 28）及 arm64-v8a**。Android 9–11 通过普通蓝牙权限读取系统已配对设备，Android 12 起会申请附近设备权限。两部手机均按系统正常配对操作，Android 端无需 root 或开启模拟位置权限。
 
 在 macOS 或 Linux 项目根目录运行：
 
@@ -67,7 +67,7 @@ Android 分发构建使用 Qt for Python 6.8.3、NDK r26b、JDK 17，默认目�
 ./setup-android.sh --release
 ```
 
-脚本在 `Build/AndroidEnv/` 复用或创建 Python 虚拟环境，准备 SDK、NDK、Gradle 缓存及官方 arm64 wheels。首次构建需要联网；SDK 许可按安装程序提示处理。可通过 `JAVA_HOME` 选择 JDK 17，通过 `ANDROID_HOST_PYTHON` 选择 Python 3.10/3.11，通过 `ANDROID_SDK_ROOT` 复用已有 SDK。仅运行 `./setup-android.sh` 可单独准备环境。
+脚本在 `Build/AndroidEnv/` 复用或创建 Python 虚拟环境，准备 SDK、NDK、Gradle 缓存及官方 arm64 wheels。首次构建需要联网；SDK 许可按安装程序提示处理。可通过 `JAVA_HOME` 选择 JDK 17，通过 `ANDROID_HOST_PYTHON` 选择 Python 3.10/3.11，通过 `ANDROID_SDK_ROOT` 或 `ANDROID_HOME` 指定 SDK。未指定时，脚本查找项目和 Android Studio 的默认 SDK 目录。仅运行 `./setup-android.sh` 可单独准备环境。
 
 发布包默认使用本机 `asset/android-signing/release.p12`（别名 `everywhere`）和同目录的 `password` 文件。迁移构建机时应安全备份并复用发布身份。也可使用 `EVERYWHERE_ANDROID_KEYSTORE`、`EVERYWHERE_ANDROID_KEY_ALIAS` 和 `EVERYWHERE_ANDROID_PASSWORD_FILE` 指定现有身份。它们用于 Android 安装包签名。用于 iPhone 配件认证的 `asset/mfi/` 身份会随包分发；持有 APK 的人可以提取配件私钥。
 

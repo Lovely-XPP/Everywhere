@@ -11,6 +11,8 @@ import sys
 import tempfile
 import zipfile
 
+from qt.android_toolchain import require_packages, sdkmanager, select
+
 ROOT = Path(__file__).resolve().parent
 QT = ROOT / "qt"
 CLIENT = ROOT / "swift/Host/IAP2Client"
@@ -32,24 +34,23 @@ def stage(directory):
         shutil.copy2(ROOT / "asset/mfi" / name, directory / "mfi" / name)
 
 
-def prepare_sdkmanager(sdk):
-    """让 Buildozer 1.5.0 能从旧入口调用已安装的 SDK 工具，并检查该入口可执行。"""
-    legacy = sdk / "tools/bin/sdkmanager"
-    if not legacy.is_file():
-        manager = sdk / "cmdline-tools/latest/bin/sdkmanager"
-        if not manager.is_file() or not os.access(manager, os.X_OK):
-            raise SystemExit(f"缺少可执行的 Android SDK Command-line Tools：{manager}")
-        try:
-            legacy.parent.mkdir(parents=True, exist_ok=True)
-            legacy.symlink_to(os.path.relpath(manager, legacy.parent))
-        except FileExistsError:
-            if not legacy.is_file():
-                raise SystemExit(f"SDK 兼容路径已被占用：{legacy}")
-        except OSError as error:
-            raise SystemExit(f"无法在 SDK 中创建 Buildozer 兼容入口 {legacy}：{error}")
-    if not os.access(legacy, os.X_OK):
-        raise SystemExit(f"Android SDK 工具不可执行：{legacy}")
-    subprocess.run([legacy, f"--sdk_root={sdk}", "--version"], check=True)
+def stage_sdk(destination, sdk, api, platform, tools_dir):
+    """为本次构建提供所选平台和工具，兼容 Buildozer 的整级平台名和旧工具路径。"""
+    manager = sdkmanager(sdk)
+    if not manager:
+        raise SystemExit(f"缺少可执行的 Android SDK Command-line Tools：{sdk}")
+    destination.mkdir()
+    for entry in sdk.iterdir():
+        if entry.name not in ("platforms", "build-tools", "tools"):
+            (destination / entry.name).symlink_to(entry)
+    for relative, source in ((f"platforms/android-{api}", platform),
+                             (f"build-tools/{tools_dir.name}", tools_dir),
+                             ("tools/bin/sdkmanager", manager.resolve())):
+        link = destination / relative
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(source)
+    subprocess.run([destination / "tools/bin/sdkmanager", f"--sdk_root={destination}", "--version"],
+                   check=True)
 
 
 def build(args):
@@ -68,14 +69,9 @@ def build(args):
     minimum = 28
     mode = "release" if args.release else "debug"
     sdk = args.sdk.resolve()
-    android_api = os.environ.get("EVERYWHERE_ANDROID_API", "34")
-    build_tools = os.environ.get("EVERYWHERE_ANDROID_BUILD_TOOLS", "35.0.0")
-    if not (sdk / "platforms" / f"android-{android_api}" / "android.jar").is_file():
-        raise SystemExit(f"缺少 Android SDK Platform {android_api}：{sdk}")
+    android_api, platform, build_tools, ndk, missing = select(sdk, args.ndk or os.getenv("ANDROID_NDK_ROOT"))
+    require_packages(missing)
     tools_dir = sdk / "build-tools" / build_tools
-    if not (tools_dir / "aapt").is_file():
-        raise SystemExit(f"缺少 Android SDK Build Tools {build_tools}：{sdk}")
-    prepare_sdkmanager(sdk)
 
     if args.release:
         signing = ROOT / "asset/android-signing"
@@ -90,15 +86,17 @@ def build(args):
     output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="everywhere-android-") as temporary:
         directory = Path(temporary) / "app"
+        build_sdk = Path(temporary) / "sdk"
+        stage_sdk(build_sdk, sdk, android_api, platform, tools_dir)
+        env = dict(os.environ, ANDROID_SDK_ROOT=str(build_sdk), ANDROID_HOME=str(build_sdk),
+                   ANDROID_NDK_ROOT=str(ndk))
         stage(directory)
         deploy_args = [deploy, "--init", "--keep-deployment-files", "--name", "Everywhere",
                        "--wheel-pyside", str(args.pyside.resolve()),
                        "--wheel-shiboken", str(args.shiboken.resolve()),
                        "--extra-modules", "Core,Gui,Widgets,Network,Bluetooth"]
-        for option, path in (("--sdk-path", args.sdk), ("--ndk-path", args.ndk)):
-            if path:
-                deploy_args.extend([option, str(path.resolve())])
-        subprocess.run(deploy_args, cwd=directory, check=True)
+        deploy_args.extend(["--sdk-path", str(build_sdk), "--ndk-path", str(ndk)])
+        subprocess.run(deploy_args, cwd=directory, env=env, check=True)
         spec = directory / "buildozer.spec"
         if not spec.is_file():
             raise SystemExit("Qt 部署工具未生成 Buildozer 配置，不能继续打包。")
@@ -115,6 +113,9 @@ def build(args):
                     "(name=android.permission.BLUETOOTH_SCAN;usesPermissionFlags=neverForLocation)",
                     "android.debug_artifact": "apk"})
         app["android.api"] = android_api
+        app["android.sdk_path"] = str(build_sdk)
+        app["android.ndk_path"] = str(ndk)
+        app["android.skip_update"] = "True"
         app["android.release_artifact"] = "apk"
         # 官方 Android wheels 的解释器 ABI 是 cp311。
         requirements = [r.strip() for r in app["requirements"].split(",")
@@ -129,7 +130,7 @@ def build(args):
         config["buildozer"]["bin_dir"] = str(Path(temporary) / "apk")
         with spec.open("w", encoding="utf-8") as out:
             config.write(out)
-        subprocess.run([sys.executable, "-m", "buildozer", "android", mode], cwd=directory, check=True)
+        subprocess.run([sys.executable, "-m", "buildozer", "android", mode], cwd=directory, env=env, check=True)
         apks = list((Path(temporary) / "apk").glob("*.apk"))
         if len(apks) != 1:
             raise SystemExit("构建未生成唯一的 APK。")

@@ -692,8 +692,10 @@ def main():
         # 进程被任务管理器终止时，让操作系统一并回收随宿主创建的蓝牙子进程。
         import win32api,win32job
         import pywintypes
+        from uuid import uuid4
         try:
-            job=win32job.CreateJobObject(None,None)
+            # pywin32 要求名称为字符串，每次启动使用独立的作业对象。
+            job=win32job.CreateJobObject(None,f'Everywhere-{uuid4()}')
             info=win32job.QueryInformationJobObject(job,win32job.JobObjectExtendedLimitInformation)
             info['BasicLimitInformation']['LimitFlags'] |= win32job.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
             win32job.SetInformationJobObject(job,win32job.JobObjectExtendedLimitInformation,info)
