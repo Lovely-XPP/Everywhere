@@ -168,12 +168,15 @@ def configure_host_make(env, temporary):
     env["PATH"] = str(tools) + os.pathsep + env.get("PATH", os.defpath)
 
 
-def stage_qt_android_jar(wheel, destination, name):
-    """从同版本 Android wheel 提取部署工具遗漏的 Java 依赖，返回绝对 JAR 路径。"""
+TLS_PLUGIN = "libplugins_tls_qopensslbackend_arm64-v8a.so"
+
+
+def stage_qt_android_file(wheel, destination, member):
+    """从 Android wheel 提取 Qt 运行依赖，返回供 Buildozer 组装 APK 的绝对路径。"""
     destination.mkdir(parents=True, exist_ok=True)
-    path = destination / name
+    path = destination / Path(member).name
     with zipfile.ZipFile(wheel) as archive:
-        with archive.open(f"PySide6/jar/{name}") as source, path.open("wb") as target:
+        with archive.open(f"PySide6/{member}") as source, path.open("wb") as target:
             shutil.copyfileobj(source, target)
     return path.resolve()
 
@@ -248,7 +251,7 @@ def build(args):
                     "icon.filename": str(ROOT / "swift/Apps/Mobile/Mobile/Assets.xcassets/AppIcon.appiconset/AppIcon.png"),
                     "orientation": "portrait, landscape, portrait-reverse, landscape-reverse",
                     "android.minapi": str(minimum), "android.ndk_api": str(minimum),
-                    "android.permissions": "android.permission.INTERNET,"
+                    "android.permissions": "android.permission.INTERNET,android.permission.ACCESS_NETWORK_STATE,"
                     "(name=android.permission.BLUETOOTH;maxSdkVersion=30),"
                     "android.permission.BLUETOOTH_CONNECT,"
                     "(name=android.permission.BLUETOOTH_SCAN;usesPermissionFlags=neverForLocation)",
@@ -259,10 +262,15 @@ def build(args):
         app["android.skip_update"] = "True"
         app["android.release_artifact"] = "apk"
         # Qt 6.8.3 的部署工具没有将 Bluetooth JNI 所需的 JAR 加入 Gradle。
-        bluetooth_jar = stage_qt_android_jar(args.pyside, Path(temporary) / "qt-jars",
-                                             "Qt6AndroidBluetooth.jar")
+        bluetooth_jar = stage_qt_android_file(args.pyside, Path(temporary) / "qt-jars",
+                                             "jar/Qt6AndroidBluetooth.jar")
         app["android.add_jars"] = ",".join(filter(None, (app.get("android.add_jars", ""),
                                                          str(bluetooth_jar))))
+        tls_plugin = stage_qt_android_file(args.pyside, Path(temporary) / "qt-plugins",
+                                           f"Qt/plugins/tls/{TLS_PLUGIN}")
+        libs_key = "android.add_libs_arm64_v8a"
+        app[libs_key] = ",".join(filter(None, (app.get(libs_key, ""), str(tls_plugin))))
+        app["p4a.hook"] = str(QT / "android" / "package_hook.py")
         app["p4a.source_dir"] = str(cached_p4a(app["p4a.branch"]))
         # 官方 Android wheels 的解释器 ABI 是 cp311。
         requirements = [r.strip() for r in app["requirements"].split(",")
@@ -303,6 +311,9 @@ def build(args):
         if len(apks) != 1:
             raise SystemExit("构建未生成唯一的 APK。")
         with zipfile.ZipFile(apks[0]) as archive:
+            for name in (TLS_PLUGIN, "libssl_3.so", "libcrypto_3.so"):
+                if f"lib/arm64-v8a/{name}" not in archive.namelist():
+                    raise SystemExit(f"APK 缺少地图 HTTPS 依赖：{name}")
             if ("AndroidManifest.xml" not in archive.namelist() or archive.testzip() is not None
                     or not any(n.startswith("lib/arm64-v8a/") for n in archive.namelist())):
                 raise SystemExit("APK 的清单、架构或完整性检查失败。")

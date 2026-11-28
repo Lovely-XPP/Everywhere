@@ -705,6 +705,11 @@ def main():
             job.Detach()
         except pywintypes.error:
             pass
+        from PySide6.QtNetwork import QNetworkProxyFactory, QSslSocket
+        # 在创建地图网络管理器前选择 Windows 系统的证书和代理配置。
+        if "schannel" in QSslSocket.availableBackends():
+            QSslSocket.setActiveBackend("schannel")
+        QNetworkProxyFactory.setUseSystemConfiguration(True)
     w=Desk(smoke_test=smoke)
     if smoke:
         if getattr(sys,'frozen',False) and sys.platform in ('win32','linux'):
@@ -714,13 +719,14 @@ def main():
         import portable_location
         import importlib
         if sys.platform == 'win32':
-            from PySide6.QtNetwork import QSslSocket
             from keyring.backends.Windows import WinVaultKeyring
             if not WinVaultKeyring.viable:
                 raise RuntimeError('Windows credential backend is unavailable')
-            if not QSslSocket.supportsSsl():
+            if QSslSocket.activeBackend() != "schannel" or not QSslSocket.supportsSsl():
                 raise RuntimeError('Qt HTTPS support for maps and place search is unavailable')
             w.setAttribute(C.Qt.WA_DontShowOnScreen)
+            from map_smoke import check_map_https
+            check_map_https(w)
             importlib.import_module('bleak.backends.winrt.client')
             importlib.import_module('bleak.backends.winrt.scanner')
         elif sys.platform == 'linux':

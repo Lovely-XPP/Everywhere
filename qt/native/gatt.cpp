@@ -89,7 +89,7 @@ int main(int argc,char** argv){
         provider.AdvertisementStatusChanged([](auto const&,auto const& args){
             if(args.Status()==GattServiceProviderAdvertisementStatus::Started ||
                args.Status()==GattServiceProviderAdvertisementStatus::StartedWithoutAllAdvertisementData)emit("READY");
-            if(args.Status()==GattServiceProviderAdvertisementStatus::Aborted)emit("ERROR advertising aborted");
+            if(args.Status()==GattServiceProviderAdvertisementStatus::Aborted)emit("ERROR advertising aborted (BluetoothError="+std::to_string(static_cast<int>(args.Error()))+")");
         });
         provider.StartAdvertising(ad);
         std::string line;

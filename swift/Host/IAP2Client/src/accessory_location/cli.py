@@ -4,6 +4,7 @@ import json
 import math
 import os
 import select
+import sys
 from dataclasses import dataclass
 
 from .auth import AuthenticationProvider
@@ -27,8 +28,8 @@ def transient_link_failure(error):
     if isinstance(error, (EOFError, ConnectionError, TimeoutError)):
         return True
     detail = str(error)
-    if detail.startswith("EW_WINDOWS_RFCOMM_ERROR "):
-        return detail.split()[-1] in {"status=10053", "status=10054", "status=10060"}
+    if detail.startswith(("EW_WINDOWS_RFCOMM_ERROR ", "EW_WINDOWS_SDP_ERROR ")):
+        return detail.split()[-1] in {"status=10051", "status=10053", "status=10054", "status=10060"}
     if not detail.startswith(("EW_BASEBAND_ERROR ", "EW_SDP_ERROR ", "EW_OPEN_ERROR ")):
         return False
     transient = {"status=0xe00002c5", "status=0xe00002cd", "status=0xe00002d5",
@@ -78,7 +79,8 @@ async def run_connection(args, parent, generation, delivery):
     auth = AuthenticationProvider(args.auth_helper) if args.auth_helper else None
     try:
         local_address = await controller_address(args.bluetooth_helper)
-        stream = await BluetoothStream.open_detected(args.bluetooth_helper, args.device, emit)
+        stream = await BluetoothStream.open_detected(args.bluetooth_helper, args.device, emit,
+                                                    force_live=sys.platform == "win32" and generation > 0)
         link = Link(stream, emit)
         await exchange(args, generation, delivery, link, auth, local_address, emit,
                        lambda: os.getppid() == parent,

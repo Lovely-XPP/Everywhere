@@ -48,7 +48,7 @@ class BluetoothStream:
                 return
             if re.fullmatch(r"EW_OPEN_ERROR channel=\d{1,2} status=0x[0-9a-f]{8} record=(live|cache) cause=(busy|permission|timeout|other)", line):
                 diagnostic = line
-            elif re.fullmatch(r"EW_WINDOWS_RFCOMM_ERROR status=\d{1,5}", line):
+            elif re.fullmatch(r"EW_WINDOWS_(?:RFCOMM|SDP)_ERROR status=\d{1,5}", line):
                 diagnostic = line
             elif re.fullmatch(r"EW_(?:BASEBAND|SDP)_ERROR status=0x[0-9a-f]{8}", line):
                 diagnostic = line
@@ -58,9 +58,9 @@ class BluetoothStream:
         raise RuntimeError(diagnostic or reasons.get(code, "Bluetooth bridge stopped before RFCOMM opened"))
 
     @classmethod
-    async def open_detected(cls, executable, address, emit):
+    async def open_detected(cls, executable, address, emit, *, force_live=False):
         """缓存通道打开或协议检测失败时，释放该桥并对同一设备实时查询一次。"""
-        for live_only in (False, True):
+        for live_only in ((True,) if force_live else (False, True)):
             try:
                 stream = await cls.open(executable, address, emit, live_only=live_only)
             except RuntimeError as error:

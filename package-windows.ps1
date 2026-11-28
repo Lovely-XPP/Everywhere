@@ -71,6 +71,8 @@ try {
     $deviceDependencies = @('--recursive-copy-metadata','pymobiledevice3','--collect-data','pymobiledevice3','--collect-data','developer_disk_image','--collect-submodules','pmd_pytcp')
     # pytun_pmd3 loads Wintun relative to its module, using the Python interpreter's architecture.
     $sitePackages = Join-Path $venv 'Lib/site-packages'
+    $schannel = Join-Path $sitePackages 'PySide6/plugins/tls/qschannelbackend.dll'
+    $mapDependencies = @('--add-binary', "${schannel}:PySide6/plugins/tls")
     $wintunDir = 'pytun_pmd3/wintun'
     $wintunBin = "$wintunDir/bin/amd64"
     $deviceDependencies += @(
@@ -103,7 +105,7 @@ VSVersionInfo(ffi=FixedFileInfo(filevers=($versionTuple),prodvers=($versionTuple
     Copy-Item $modern "$src/swift/Host/ModernBackend" -Recurse
     Get-ChildItem $src -Directory -Recurse -Filter '__pycache__' | Remove-Item -Recurse -Force
     $product = "Everywhere-$appVersion-windows-x64"
-    Run $py ($common + $deviceDependencies + @('--name',$product,'--version-file',$versionFile,'--windowed','--onefile','--add-data',"${dest}:.",'--hidden-import','portable_location','--collect-submodules','bleak.backends.winrt','--copy-metadata','keyring','--hidden-import','keyring.backends.Windows',"$qt/windows_entry.py"))
+    Run $py ($common + $deviceDependencies + $mapDependencies + @('--name',$product,'--version-file',$versionFile,'--windowed','--onefile','--add-data',"${dest}:.",'--hidden-import','portable_location','--collect-submodules','bleak.backends.winrt','--copy-metadata','keyring','--hidden-import','keyring.backends.Windows',"$qt/windows_entry.py"))
     $smokeArgs = @('--smoke-test')
     if ($identityFiles -contains 'identity.pk8') { $smokeArgs += '--verify-bundle' }
     $previousSmokeLog = $env:EVERYWHERE_SMOKE_LOG

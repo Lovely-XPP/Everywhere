@@ -169,8 +169,9 @@ class Bluetooth:
         labels={'rfcomm_connected':'RFCOMM 已连接','link_ready':'iAP2 链路就绪',
                 'identification_accepted':'已接受配件标识','authentication_succeeded':'iPhone 已接受配件认证',
                 'location_requested':'手机已请求位置','location_stopped':'手机已停止请求位置',
-                'reconnecting':'连接中断，正在重连','reconnected':'已重连，请重新确认选点',
+                'reconnected':'已重连，请重新确认选点',
                 'target_updated':'选点已更新','finished':'iAP2 会话已结束'}
+        opened=False
         detail=None
         error_task=asyncio.create_task(proc.stderr.read())
         try:
@@ -180,6 +181,8 @@ class Bluetooth:
                 except ValueError:
                     continue
                 kind=row.get('event')
+                if kind=='rfcomm_connected':
+                    opened=True
                 if kind=='reconnecting':
                     self.generation=row['generation']
                     self.identified = self.authenticated = self.updating = False
@@ -195,8 +198,24 @@ class Bluetooth:
                     self.changed()
                 if kind=='location_link_acknowledged':
                     self.report(f"链路回执 {row['count']} · {row['latitude']:.7f}, {row['longitude']:.7f}")
+                elif kind=='bluetooth_stage':
+                    stage={'discovery':'正在查询 iPhone 的 iAP2 服务','open':'正在打开 RFCOMM 通道',
+                           'baseband':'正在建立经典蓝牙连接'}.get(row.get('stage'))
+                    if stage: self.report(stage)
+                elif kind=='reconnecting':
+                    action='连接中断，正在重连' if opened else '尚未建立 RFCOMM 连接，正在重试'
+                    delay=row.get("delay")
+                    self.report(f"{action}（{delay} 秒后）" if delay is not None else action)
+                    opened=False
                 elif kind=='error':
                     detail=row.get('detail','iAP2 错误')
+                    if detail.startswith(('EW_WINDOWS_RFCOMM_ERROR ', 'EW_WINDOWS_SDP_ERROR ')):
+                        stage='iAP2 服务查询' if '_SDP_' in detail else 'RFCOMM 连接'
+                        status=detail.partition('status=')[2]
+                        reason={'10051':'失败：经典蓝牙目标不可达，请确认双方蓝牙已开启、设备在附近且仍已配对',
+                                '10060':'超时，请确认 iPhone 在附近且仍与这台电脑配对',
+                                '10108':'未找到所选 iPhone 的 iAP2 服务'}.get(status,'失败')
+                        detail=f'{stage}{reason}（Winsock {status}）'
                     self.report(detail)
                 elif kind in labels:
                     self.report(labels[kind])

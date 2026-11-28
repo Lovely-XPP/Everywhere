@@ -10,12 +10,12 @@ from appearance import draw_symbol
 from app_version import VERSION
 
 OSM='https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-USER_AGENT=f'EverywhereDesktop/{VERSION} (iPhone location controller)'.encode('ascii')
+USER_AGENT=f'EverywhereDesktop/{VERSION} (+https://github.com/Lovely-XPP/Everywhere)'
 
 
 def request(url):
     r=N.QNetworkRequest(C.QUrl(url))
-    r.setRawHeader(b'User-Agent',USER_AGENT)
+    r.setHeader(N.QNetworkRequest.KnownHeaders.UserAgentHeader,USER_AGENT)
     r.setTransferTimeout(12000)
     return r
 
@@ -126,7 +126,9 @@ class MapView(W.QWidget):
 
     def fetch(self,url):
         r=request(url)
-        if self.cache is not None and url not in self.reload_urls:
+        if url in self.reload_urls:
+            r.setAttribute(N.QNetworkRequest.CacheLoadControlAttribute,N.QNetworkRequest.AlwaysNetwork)
+        elif self.cache is not None:
             expires=self.cache.metaData(r.url()).expirationDate()
             if expires.isValid() and expires>C.QDateTime.currentDateTimeUtc():
                 r.setAttribute(N.QNetworkRequest.CacheLoadControlAttribute,N.QNetworkRequest.PreferCache)
@@ -152,7 +154,8 @@ class MapView(W.QWidget):
                 retry=bytes(reply.rawHeader('Retry-After'))
                 if retry.isdigit():
                     delay=max(delay,min(86400,int(retry)))
-                self.failed[url]=(time.monotonic()+delay,delay)
+                reason='响应不是有效地图图片' if success else reply.errorString()
+                self.failed[url]=(time.monotonic()+delay,delay,reason)
                 if len(self.failed)>512: self.failed.pop(next(iter(self.failed)))
             dirty=G.QRegion()
             for visible_url,_,_,box in self.visible_tiles():
@@ -172,10 +175,11 @@ class MapView(W.QWidget):
         p.fillRect(self.rect(),G.QColor('#202637' if dark else '#e9edf0'))
         left,top=self.origin()
         count=2**self.z
-        visible_failed=False
+        failure_reason=None
         region=event.region()
         for url,x,y,box in self.visible_tiles():
-            visible_failed|=url in self.failed
+            if failure_reason is None and url in self.failed:
+                failure_reason=self.failed[url][2]
             if not region.intersects(box): continue
             if url in self.tiles:
                 p.drawPixmap(box,self.tiles[url])
@@ -215,8 +219,10 @@ class MapView(W.QWidget):
             p.drawEllipse(C.QPointF(0,-22),4,4)
             p.restore()
         label=self.attribution
-        if visible_failed:
-            label='部分底图未更新 · 将自动重试    '+label
+        if failure_reason:
+            budget=max(0,self.width()-p.fontMetrics().horizontalAdvance(label)-24)
+            status=p.fontMetrics().elidedText('底图加载失败 · '+failure_reason,C.Qt.ElideRight,budget)
+            label=status+'    '+label
         p.setPen(G.QColor('#e0e2ed' if dark else '#27343a'))
         w=p.fontMetrics().horizontalAdvance(label)+12
         p.fillRect(self.width()-w,self.height()-22,w,22,G.QColor('#303747' if dark else '#fafafa'))

@@ -32,6 +32,9 @@ class Reply(C.QObject):
     def error(self):
         return self.result
 
+    def errorString(self):
+        return self.result.name
+
     def readAll(self):
         return self.payload
 

@@ -12,6 +12,7 @@
 #include <string>
 #include <iostream>
 #include <thread>
+#include <vector>
 
 static std::string address(ULONGLONG n) {
     char out[18];
@@ -26,6 +27,51 @@ static std::string name(const wchar_t* w) {
     if(n) result.pop_back();
     for(auto& ch:result) if(static_cast<unsigned char>(ch)<32) ch=' ';
     return result;
+}
+// 重试时实时查询所选设备的 iAP2 服务。成功写入通道 1–30 并返回 0，失败返回 Winsock 错误码。
+static int discoverChannel(SOCKADDR_BTH &remote, GUID &service) {
+    wchar_t context[64]{};
+    DWORD chars = sizeof(context) / sizeof(context[0]);
+    if (WSAAddressToStringW(reinterpret_cast<sockaddr*>(&remote), sizeof(remote),
+                            nullptr, context, &chars) == SOCKET_ERROR) return WSAGetLastError();
+    WSAQUERYSETW query{};
+    query.dwSize = sizeof(query);
+    query.dwNameSpace = NS_BTH;
+    query.lpServiceClassId = &service;
+    query.lpszContext = context;
+    HANDLE lookup{};
+    if (WSALookupServiceBeginW(&query, LUP_FLUSHCACHE | LUP_RETURN_ADDR, &lookup) == SOCKET_ERROR)
+        return WSAGetLastError();
+    int error = WSASERVICE_NOT_FOUND;
+    std::vector<BYTE> buffer(2048);
+    while (!remote.port) {
+        DWORD size = static_cast<DWORD>(buffer.size());
+        auto result = reinterpret_cast<WSAQUERYSETW*>(buffer.data());
+        result->dwSize = sizeof(*result);
+        if (WSALookupServiceNextW(lookup, LUP_RETURN_ADDR, &size, result) == SOCKET_ERROR) {
+            error = WSAGetLastError();
+            if (error == WSAEFAULT && size > buffer.size()) {
+                buffer.resize(size);
+                continue;
+            }
+            if (error == WSA_E_NO_MORE || error == WSAENOMORE) error = WSASERVICE_NOT_FOUND;
+            break;
+        }
+        for (DWORD i = 0; i < result->dwNumberOfCsAddrs && !remote.port; ++i) {
+            const auto &entry = result->lpcsaBuffer[i];
+            for (const auto &endpoint : {entry.RemoteAddr, entry.LocalAddr}) {
+                if (!endpoint.lpSockaddr || endpoint.iSockaddrLength < int(sizeof(SOCKADDR_BTH))) continue;
+                auto addr = reinterpret_cast<const SOCKADDR_BTH*>(endpoint.lpSockaddr);
+                if (addr->addressFamily == AF_BTH && addr->btAddr == remote.btAddr &&
+                    addr->port >= 1 && addr->port <= 30) {
+                    remote.port = addr->port;
+                    break;
+                }
+            }
+        }
+    }
+    WSALookupServiceEnd(lookup);
+    return remote.port ? 0 : error;
 }
 int main(int argc,char** argv) {
     if(argc<2) return 1;
@@ -73,8 +119,18 @@ int main(int argc,char** argv) {
                   reinterpret_cast<const char*>(&authenticate), sizeof(authenticate)) == SOCKET_ERROR) return 4;
     SOCKADDR_BTH remote{};
     remote.addressFamily=AF_BTH; remote.btAddr=target;
-    remote.serviceClassId={0x00000000,0xdeca,0xfade,{0xde,0xca,0xde,0xaf,0xde,0xca,0xca,0xfe}};
-    std::cerr<<"EW_PHASE discovery"<<std::endl;
+    GUID service={0x00000000,0xdeca,0xfade,{0xde,0xca,0xde,0xaf,0xde,0xca,0xca,0xfe}};
+    if (argc == 3 && strcmp(argv[1], "--live") == 0) {
+        std::cerr<<"EW_PHASE discovery"<<std::endl;
+        int error = discoverChannel(remote, service);
+        if (error) {
+            std::cerr<<"EW_WINDOWS_SDP_ERROR status="<<error<<std::endl;
+            return 4;
+        }
+    } else {
+        remote.serviceClassId = service;
+    }
+    std::cerr<<"EW_PHASE open"<<std::endl;
     if(connect(socketFd,reinterpret_cast<sockaddr*>(&remote),sizeof(remote))!=0) {
         std::cerr<<"EW_WINDOWS_RFCOMM_ERROR status="<<WSAGetLastError()<<std::endl;return 4;
     }

@@ -1,4 +1,4 @@
-# Everywhere 0.2.1 Python / Qt 桌面版
+# Everywhere 0.2.2 Python / Qt 桌面版
 
 `qt/` 是三个平台共用的 Python 源码目录。地图、USB/Wi-Fi 定位会话、iAP2 协议和手机遥控共用一套实现。经典蓝牙与 BLE 使用各平台的系统后端。
 
@@ -75,4 +75,4 @@ python-for-android 下载的 CPython、OpenSSL、SQLite 等 recipe 源码包及�
 
 发布包默认使用本机 `asset/android-signing/release.p12`（别名 `everywhere`）和同目录的 `password` 文件。迁移构建机时应安全备份并复用发布身份。也可使用 `EVERYWHERE_ANDROID_KEYSTORE`、`EVERYWHERE_ANDROID_KEY_ALIAS` 和 `EVERYWHERE_ANDROID_PASSWORD_FILE` 指定现有身份。它们用于 Android 安装包签名。用于 iPhone 配件认证的 `asset/mfi/` 身份会随包分发；持有 APK 的人可以提取配件私钥。
 
-发布构建检查最终 APK 的最低系统版本、arm64 原生库、调试标志和签名，通过后输出到 `Build/Android/Everywhere-0.2.1-arm64-release.apk`。可用已安装工具链执行 `python package-android.py --help` 查看独立打包参数。仍需通过 Android 真机和 iPhone 核对识别、认证、连续设点和恢复。
+发布构建检查最终 APK 的最低系统版本、arm64 原生库、调试标志和签名，通过后输出到 `Build/Android/Everywhere-0.2.2-arm64-release.apk`。可用已安装工具链执行 `python package-android.py --help` 查看独立打包参数。仍需通过 Android 真机和 iPhone 核对识别、认证、连续设点和恢复。
