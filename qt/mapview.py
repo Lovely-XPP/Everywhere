@@ -23,9 +23,10 @@ def request(url):
 class MapView(W.QWidget):
     picked=C.Signal(float,float)
     favorite_picked=C.Signal(str,float,float)
-    def __init__(self):
+    def __init__(self, *, refresh_window=False):
         super().__init__()
         self.template,self.attribution=OSM,'© OpenStreetMap contributors'
+        self.refresh_window=refresh_window
         self.z=11
         self.center=(31.2304,121.4737)
         self.marker=None
@@ -64,8 +65,14 @@ class MapView(W.QWidget):
         if self.isVisible() and (not self.scheduler.isActive() or self.scheduler.remainingTime()>delay):
             self.scheduler.start(delay)
 
-    def camera_changed(self):
+    def refresh_viewport(self):
+        """标记地图需要重绘；Android 同时从顶层窗口原点刷新整张显示表面。"""
         self.update()
+        if self.refresh_window and self.isVisible():
+            self.window().update()
+
+    def camera_changed(self):
+        self.refresh_viewport()
         self.schedule(16)
 
     def showEvent(self,event):
@@ -138,7 +145,7 @@ class MapView(W.QWidget):
             reply.deleteLater()
             if self.pending.get(url) is not reply: return
             del self.pending[url]
-            tile=G.QPixmap()
+            tile=G.QImage()
             success=reply.error()==N.QNetworkReply.NoError
             if success and tile.loadFromData(reply.readAll()):
                 self.tiles[url]=tile
@@ -157,11 +164,8 @@ class MapView(W.QWidget):
                 reason='响应不是有效地图图片' if success else reply.errorString()
                 self.failed[url]=(time.monotonic()+delay,delay,reason)
                 if len(self.failed)>512: self.failed.pop(next(iter(self.failed)))
-            dirty=G.QRegion()
-            for visible_url,_,_,box in self.visible_tiles():
-                if visible_url==url: dirty|=box
-            if not dirty.isEmpty():
-                self.update(dirty.united(G.QRegion(0,self.height()-22,self.width(),22)))
+            # 使用控件当前视口刷新，Qt 会合并同一轮事件中的瓦片更新。
+            self.refresh_viewport()
             self.schedule()
         reply.finished.connect(finished)
 
@@ -172,21 +176,28 @@ class MapView(W.QWidget):
     def paintEvent(self,event):
         p=G.QPainter(self)
         dark=self.palette().color(G.QPalette.Window).lightness()<128
-        p.fillRect(self.rect(),G.QColor('#202637' if dark else '#e9edf0'))
+        # 底图在局部逻辑像素画布上拼接，Android 高 DPI 窗口只负责最终合成。
+        surface=G.QImage(self.size(),G.QImage.Format_RGB32)
+        surface.fill(G.QColor('#202637' if dark else '#e9edf0'))
+        tiles_painter=G.QPainter(surface)
         left,top=self.origin()
         count=2**self.z
         failure_reason=None
-        region=event.region()
+        ready=total=0
         for url,x,y,box in self.visible_tiles():
+            total+=1
             if failure_reason is None and url in self.failed:
                 failure_reason=self.failed[url][2]
-            if not region.intersects(box): continue
             if url in self.tiles:
-                p.drawPixmap(box,self.tiles[url])
+                ready+=1
+                tile=self.tiles[url]
+                tiles_painter.drawImage(box,tile,tile.rect())
             else:
-                p.setPen(G.QColor('#2b3245' if dark else '#dbe2e7'))
-                p.drawRect(box)
-                self.paint_cached_zoom(p,x,y,box)
+                tiles_painter.setPen(G.QColor('#2b3245' if dark else '#dbe2e7'))
+                tiles_painter.drawRect(box)
+                self.paint_cached_zoom(tiles_painter,x,y,box)
+        tiles_painter.end()
+        p.drawImage(self.rect(),surface,surface.rect())
         self.pin_hits.clear()
         if self.show_favorites:
             p.setRenderHint(G.QPainter.Antialiasing)
@@ -223,6 +234,8 @@ class MapView(W.QWidget):
             budget=max(0,self.width()-p.fontMetrics().horizontalAdvance(label)-24)
             status=p.fontMetrics().elidedText('底图加载失败 · '+failure_reason,C.Qt.ElideRight,budget)
             label=status+'    '+label
+        elif ready<total:
+            label=f'加载 {ready}/{total}   '+label
         p.setPen(G.QColor('#e0e2ed' if dark else '#27343a'))
         w=p.fontMetrics().horizontalAdvance(label)+12
         p.fillRect(self.width()-w,self.height()-22,w,22,G.QColor('#303747' if dark else '#fafafa'))
@@ -238,13 +251,13 @@ class MapView(W.QWidget):
             if parent is not None:
                 w,h=parent.width()/scale,parent.height()/scale
                 src=C.QRectF(x%scale*w,y%scale*h,w,h)
-                p.drawPixmap(C.QRectF(box),parent,src)
+                p.drawImage(C.QRectF(box),parent,src)
                 break
         for dx in (0,1):
             for dy in (0,1):
                 child=self.tiles.get(self.template.format(z=self.z+1,x=2*x+dx,y=2*y+dy))
                 if child is not None:
-                    p.drawPixmap(C.QRect(box.x()+128*dx,box.y()+128*dy,128,128),child)
+                    p.drawImage(C.QRect(box.x()+128*dx,box.y()+128*dy,128,128),child,child.rect())
         p.restore()
 
     def choose(self,coords,center=True,span=.05):
@@ -256,7 +269,7 @@ class MapView(W.QWidget):
             self.z=max(1,min(19,round(math.log2(360*pixels/(256*span)))))
             self.camera_changed()
         else:
-            self.update()
+            self.refresh_viewport()
 
     def mousePressEvent(self,event):
         if event.button()==C.Qt.LeftButton:

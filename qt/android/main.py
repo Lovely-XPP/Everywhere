@@ -110,7 +110,7 @@ class Console(W.QWidget):
         map_box = W.QVBoxLayout(map_panel)
         map_box.setContentsMargins(6, 6, 6, 6)
         map_box.setSpacing(6)
-        self.map = MapView()
+        self.map = MapView(refresh_window=True)
         self.map.setMinimumSize(160, 90)
         self.map.picked.connect(self.pick)
         self.map.favorite_picked.connect(lambda name, lat, lon: self.draft((lat, lon), name=name))
@@ -329,7 +329,7 @@ class Console(W.QWidget):
         """输入改变时使旧草稿失效，直至用户确认坐标。"""
         self.coords = None
         self.map.marker = None
-        self.map.update()
+        self.map.refresh_viewport()
         self.target.setText('编辑坐标')
         self.target_coords.setText('点击「在地图上查看草稿」确认。')
         self.controls()
@@ -348,7 +348,7 @@ class Console(W.QWidget):
 
     def refresh_places(self):
         self.map.favorites = self.records('favorites')
-        self.map.update()
+        self.map.refresh_viewport()
 
     def places(self, key):
         dialog = PlaceBrowser(self, key)

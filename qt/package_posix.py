@@ -137,7 +137,7 @@ def build(args, scratch, python):
     shutil.copytree(resources,product/'Contents/Resources',dirs_exist_ok=True)
     info=product/'Contents/Info.plist'
     metadata=plistlib.loads(info.read_bytes())
-    metadata.update(CFBundleShortVersionString=VERSION, CFBundleVersion='4',
+    metadata.update(CFBundleShortVersionString=VERSION, CFBundleVersion='5',
                     NSBluetoothAlwaysUsageDescription='连接所选 iPhone 以传输选点，或向手机提供蓝牙状态。',
                     NSLocalNetworkUsageDescription='发现和连接已配对的局域网 iPhone。',
                     NSBonjourServices=['_apple-mobdev2._tcp','_vloc-remote._tcp'],LSMinimumSystemVersion='14.0')
