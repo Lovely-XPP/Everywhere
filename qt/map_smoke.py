@@ -36,6 +36,12 @@ def check_map_https(window):
     payload = bytes(buffer.data())
 
     class TileHandler(BaseHTTPRequestHandler):
+        def setup(self):
+            """在请求线程完成握手，空闲连接最多等待 5 秒。"""
+            self.request.settimeout(5)
+            self.request.do_handshake()
+            super().setup()
+
         def do_GET(self):
             self.send_response(200)
             self.send_header("Content-Type", "image/png")
@@ -50,7 +56,8 @@ def check_map_https(window):
                                                   serialization.NoEncryption()))
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(chain)
-        server.socket = context.wrap_socket(server.socket, server_side=True)
+        # accept 只接收连接，避免未完成的 TLS 握手阻塞 serve_forever 的退出。
+        server.socket = context.wrap_socket(server.socket, server_side=True, do_handshake_on_connect=False)
         original = N.QSslConfiguration.defaultConfiguration()
         config = N.QSslConfiguration(original)
         config.addCaCertificate(N.QSslCertificate(pem))
